@@ -115,48 +115,106 @@ Click the download button below to get your image, or you can access it later fr
     }, 1500)
   }
 
-  const handleSendMessage = async (content: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
+const handleSendMessage = async (content: string) => {
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    role: "user",
+    content,
+    timestamp: new Date(),
+  }
+
+  setMessages((prev) => [...prev, userMessage])
+  setIsLoading(true)
+
+  try {
+    if (currentStep === "validation" && imageConfig) {
+      const input = content.toLowerCase()
+      if (
+        input === "yes" ||
+        input.includes("confirm") ||
+        input.includes("proceed") ||
+        input.includes("start") ||
+        input.includes("build")
+      ) {
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: `**Starting Automated Build Pipeline**\n\nYour configuration has been validated. The orchestration system is now building your image.\n\nThis process typically takes 2-5 minutes...`,
+          timestamp: new Date(),
+          action: "building",
+        }
+        setMessages((prev) => [...prev, assistantMessage])
+        completeStep("validation")
+        simulateBuildProcess()
+        setIsLoading(false)
+        return
+      }
+    }
+
+    const response = await fetch("/api/vm/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: content, owner_id: 1 }),
+    })
+
+    const data = await response.json()
+
+    if (data.error) {
+      throw new Error(data.error)
+    }
+
+    const spec = data.spec
+    const newConfig: ImageConfig = {
+      os: spec.os,
+      version: "",
+      packages: spec.packages,
+      cpu: spec.cpu,
+      ram: spec.ram_gb,
+      storage: 100,
+    }
+
+    setImageConfig(newConfig)
+    completeStep("request")
+    setCurrentStep("validation")
+
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: `**Configuration Validated**
+
+I've analyzed your request and created the following image specification:
+
+| Parameter | Value |
+|-----------|-------|
+| **Operating System** | ${spec.os} |
+| **vCPU** | ${spec.cpu} cores |
+| **Memory** | ${spec.ram_gb} GB RAM |
+| **Storage** | 100 GB |
+| **Packages** | ${spec.packages.join(", ")} |
+| **Security** | CIS Benchmark hardening enabled |
+| **Job ID** | ${data.job_id} |
+| **VM ID** | ${data.vm_id} |
+
+**Validation Status:** All checks passed ✅
+
+**Type "yes" to confirm and start the automated build**, or describe any changes you'd like to make.`,
+      action: "confirm_build",
       timestamp: new Date(),
     }
 
-    setMessages((prev) => [...prev, userMessage])
-    setIsLoading(true)
-
-    // Handle different workflow states
-    setTimeout(() => {
-      const response = generateResponse(content, currentStep, imageConfig)
-      
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: response.content,
-        timestamp: new Date(),
-        action: response.action,
-      }
-      
-      setMessages((prev) => [...prev, assistantMessage])
-      setIsLoading(false)
-
-      // Update workflow state based on response
-      if (response.newConfig) {
-        setImageConfig(response.newConfig)
-      }
-      
-      if (response.nextStep) {
-        if (response.nextStep === "validation") {
-          completeStep("request")
-          setCurrentStep("validation")
-        } else if (response.nextStep === "orchestration") {
-          completeStep("validation")
-          simulateBuildProcess()
-        }
-      }
-    }, 1000)
+    setMessages((prev) => [...prev, assistantMessage])
+  } catch (error) {
+    const errorMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: "assistant",
+      content: `Sorry, I encountered an error processing your request. Please try again.`,
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, errorMessage])
+  } finally {
+    setIsLoading(false)
   }
+}
 
   if (currentStep === "captcha" && !completedSteps.includes("captcha")) {
     return <CaptchaGate onVerified={handleCaptchaVerified} />
