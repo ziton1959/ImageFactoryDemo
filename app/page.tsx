@@ -151,7 +151,7 @@ const handleSendMessage = async (content: string) => {
       }
     }
 
-    const response = await fetch("/api/vm/create", {
+    const response = await fetch("http://10.202.135.233:8000/api/vm/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: content, owner_id: 1 }),
