@@ -9,6 +9,9 @@ import { CaptchaGate } from "@/components/captcha-gate"
 import { WorkflowSteps, type WorkflowStep } from "@/components/workflow-steps"
 import { ImageDownload } from "@/components/image-download"
 
+// Backend base URL — change here if the server IP/port changes.
+const API_BASE = "http://10.202.135.233:8000"
+
 export interface Message {
   id: string
   role: "user" | "assistant"
@@ -34,6 +37,9 @@ export default function ChatPage() {
   const [imageConfig, setImageConfig] = useState<ImageConfig | null>(null)
   const [buildProgress, setBuildProgress] = useState(0)
   const [imageReady, setImageReady] = useState(false)
+  // The real job id returned by the backend when the build was created.
+  const [currentJobId, setCurrentJobId] = useState<number | null>(null)
+  const [builtImageName, setBuiltImageName] = useState<string>("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -53,168 +59,160 @@ export default function ChatPage() {
     setCurrentStep("request")
   }
 
-  const simulateBuildProcess = () => {
+  const addAssistant = (content: string, action?: Message["action"]) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        role: "assistant",
+        content,
+        timestamp: new Date(),
+        action,
+      },
+    ])
+  }
+
+  // Poll the real backend job until it finishes or fails.
+  const pollJob = (jobId: number) => {
     setCurrentStep("orchestration")
     setBuildProgress(0)
-    
-    const buildSteps = [
-      { progress: 10, message: "Selecting base template..." },
-      { progress: 25, message: "Provisioning virtual machine..." },
-      { progress: 40, message: "Installing operating system..." },
-      { progress: 60, message: "Installing packages (Docker, Python)..." },
-      { progress: 75, message: "Applying security hardening..." },
-      { progress: 90, message: "Running compliance scans..." },
-      { progress: 100, message: "Finalizing image..." },
-    ]
 
-    let stepIndex = 0
-    const interval = setInterval(() => {
-      const currentBuildStep = buildSteps[stepIndex]
-      if (currentBuildStep) {
-        setBuildProgress(currentBuildStep.progress)
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `build-${Date.now()}-${stepIndex}`,
-            role: "assistant",
-            content: `[${currentBuildStep.progress}%] ${currentBuildStep.message}`,
-            timestamp: new Date(),
-          },
-        ])
-        stepIndex++
-      } else {
-        clearInterval(interval)
-        completeStep("orchestration")
-        setCurrentStep("ready")
-        setImageReady(true)
-        
-        const imageId = Date.now().toString().slice(-6)
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `ready-${Date.now()}`,
-            role: "assistant",
-            content: `**Image Build Complete!**
+    let elapsed = 0
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/jobs/${jobId}`)
+        const job = await res.json()
+        const status = job.status
 
-Your custom VM image has been successfully created and registered in the image library.
+        // Rough visual progress: creeps up while running, full on completion.
+        elapsed += 5
+        if (status === "completed") {
+          clearInterval(interval)
+          setBuildProgress(100)
+          completeStep("orchestration")
+          setCurrentStep("ready")
+          setImageReady(true)
 
-**Image Details:**
-- **Name:** custom-ubuntu-docker-${imageId}
-- **Size:** 4.2 GB
-- **Format:** OVF/OVA
-- **Checksum:** SHA256 verified
-
-Click the download button below to get your image, or you can access it later from the Image Library.`,
-            timestamp: new Date(),
-            action: "ready",
-          },
-        ])
-        completeStep("ready")
-        setCurrentStep("download")
-      }
-    }, 1500)
-  }
-
-const handleSendMessage = async (content: string) => {
-  const userMessage: Message = {
-    id: Date.now().toString(),
-    role: "user",
-    content,
-    timestamp: new Date(),
-  }
-
-  setMessages((prev) => [...prev, userMessage])
-  setIsLoading(true)
-
-  try {
-    if (currentStep === "validation" && imageConfig) {
-      const input = content.toLowerCase()
-      if (
-        input === "yes" ||
-        input.includes("confirm") ||
-        input.includes("proceed") ||
-        input.includes("start") ||
-        input.includes("build")
-      ) {
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: `**Starting Automated Build Pipeline**\n\nYour configuration has been validated. The orchestration system is now building your image.\n\nThis process typically takes 2-5 minutes...`,
-          timestamp: new Date(),
-          action: "building",
+          const name = job.template || builtImageName || "vm-image"
+          setBuiltImageName(name)
+          addAssistant(
+            `**Image Build Complete**\n\n` +
+              `Your VM image was built and stored in the image library.\n\n` +
+              `- **Image:** ${name}.qcow2\n` +
+              `- **Format:** qcow2\n` +
+              `- **Stored in:** vm-images bucket\n\n` +
+              `Use the download button below to retrieve it.`,
+            "ready",
+          )
+          completeStep("ready")
+          setCurrentStep("download")
+        } else if (status === "failed") {
+          clearInterval(interval)
+          setCurrentStep("validation")
+          const err = (job.logs || "").slice(-600)
+          addAssistant(
+            `**Build Failed**\n\nThe build did not complete. Last log output:\n\n\`\`\`\n${err}\n\`\`\``,
+          )
+        } else {
+          // still running/queued — nudge the progress bar up to ~90% max
+          setBuildProgress((p) => (p < 90 ? p + 8 : 90))
         }
-        setMessages((prev) => [...prev, assistantMessage])
-        completeStep("validation")
-        simulateBuildProcess()
-        setIsLoading(false)
-        return
+      } catch (e) {
+        // network hiccup while polling — keep trying, but cap total wait
+        if (elapsed > 600) {
+          clearInterval(interval)
+          setCurrentStep("validation")
+          addAssistant(
+            `**Could not reach the build service.** The job may still be running on the server. Check job status manually.`,
+          )
+        }
       }
-    }
-
-    const response = await fetch("http://10.202.135.233:8000/api/vm/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: content, owner_id: 1 }),
-    })
-
-    const data = await response.json()
-
-    if (data.error) {
-      throw new Error(data.error)
-    }
-
-    const spec = data.spec
-    const newConfig: ImageConfig = {
-      os: spec.os,
-      version: "",
-      packages: spec.packages,
-      cpu: spec.cpu,
-      ram: spec.ram_gb,
-      storage: 100,
-    }
-
-    setImageConfig(newConfig)
-    completeStep("request")
-    setCurrentStep("validation")
-
-    const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: "assistant",
-      content: `**Configuration Validated**
-
-I've analyzed your request and created the following image specification:
-
-| Parameter | Value |
-|-----------|-------|
-| **Operating System** | ${spec.os} |
-| **vCPU** | ${spec.cpu} cores |
-| **Memory** | ${spec.ram_gb} GB RAM |
-| **Storage** | 100 GB |
-| **Packages** | ${spec.packages.join(", ")} |
-| **Security** | CIS Benchmark hardening enabled |
-| **Job ID** | ${data.job_id} |
-| **VM ID** | ${data.vm_id} |
-
-**Validation Status:** All checks passed ✅
-
-**Type "yes" to confirm and start the automated build**, or describe any changes you'd like to make.`,
-      action: "confirm_build",
-      timestamp: new Date(),
-    }
-
-    setMessages((prev) => [...prev, assistantMessage])
-  } catch (error) {
-    const errorMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      role: "assistant",
-      content: `Sorry, I encountered an error processing your request. Please try again.`,
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, errorMessage])
-  } finally {
-    setIsLoading(false)
+    }, 5000)
   }
-}
+
+  const handleSendMessage = async (content: string) => {
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content,
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, userMessage])
+    setIsLoading(true)
+
+    try {
+      // Confirmation step: build was already created on first submit;
+      // here we just start polling the real job.
+      if (currentStep === "validation" && imageConfig && currentJobId !== null) {
+        const input = content.toLowerCase()
+        if (
+          input === "yes" ||
+          input.includes("confirm") ||
+          input.includes("proceed") ||
+          input.includes("start") ||
+          input.includes("build")
+        ) {
+          addAssistant(
+            `**Starting Automated Build Pipeline**\n\nThe orchestration system is building your image (job ${currentJobId}). This typically takes 2-5 minutes...`,
+            "building",
+          )
+          completeStep("validation")
+          pollJob(currentJobId)
+          setIsLoading(false)
+          return
+        }
+      }
+
+      // Initial prompt: create the build on the backend.
+      const response = await fetch(`${API_BASE}/api/vm/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: content, owner_id: 1 }),
+      })
+      const data = await response.json()
+
+      if (data.error || data.status === "failed") {
+        throw new Error(data.error || "request failed")
+      }
+
+      const spec = data.spec
+      const newConfig: ImageConfig = {
+        os: spec.os,
+        version: "",
+        packages: spec.packages,
+        cpu: spec.cpu,
+        ram: spec.ram_gb,
+        storage: 100,
+      }
+      setImageConfig(newConfig)
+      setCurrentJobId(data.job_id)
+      setBuiltImageName(spec.template_name || "")
+      completeStep("request")
+      setCurrentStep("validation")
+
+      addAssistant(
+        `**Configuration Validated**\n\n` +
+          `I parsed your request into this specification:\n\n` +
+          `| Parameter | Value |\n` +
+          `|-----------|-------|\n` +
+          `| **Operating System** | ${spec.os} |\n` +
+          `| **vCPU** | ${spec.cpu} cores |\n` +
+          `| **Memory** | ${spec.ram_gb} GB RAM |\n` +
+          `| **Packages** | ${spec.packages.join(", ") || "none"} |\n` +
+          `| **Template** | ${spec.template_name} |\n` +
+          `| **Job ID** | ${data.job_id} |\n` +
+          `| **VM ID** | ${data.vm_id} |\n\n` +
+          `**Type "yes" to confirm and start the build**, or describe any changes.`,
+        "confirm_build",
+      )
+    } catch (error) {
+      addAssistant(
+        `Sorry, I encountered an error processing your request. Please try again.`,
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   if (currentStep === "captcha" && !completedSteps.includes("captcha")) {
     return <CaptchaGate onVerified={handleCaptchaVerified} />
@@ -224,7 +222,7 @@ I've analyzed your request and created the following image specification:
     <div className="flex flex-col h-screen bg-background">
       <ChatHeader />
       <WorkflowSteps currentStep={currentStep} completedSteps={completedSteps} />
-      
+
       <main className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <WelcomeScreen onSuggestionClick={handleSendMessage} />
@@ -233,7 +231,7 @@ I've analyzed your request and created the following image specification:
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
-            
+
             {isLoading && (
               <div className="flex items-center gap-2 py-4">
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
@@ -242,7 +240,7 @@ I've analyzed your request and created the following image specification:
                 <span className="text-muted-foreground text-sm">Processing...</span>
               </div>
             )}
-            
+
             {currentStep === "orchestration" && (
               <div className="my-4 p-4 rounded-lg border border-border bg-card">
                 <div className="flex items-center justify-between mb-2">
@@ -250,30 +248,30 @@ I've analyzed your request and created the following image specification:
                   <span className="text-sm text-muted-foreground">{buildProgress}%</span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-primary transition-all duration-500"
                     style={{ width: `${buildProgress}%` }}
                   />
                 </div>
               </div>
             )}
-            
+
             {imageReady && currentStep === "download" && (
-              <ImageDownload 
-                imageName={`custom-ubuntu-docker-${Date.now().toString().slice(-6)}`}
-                imageSize="4.2 GB"
+              <ImageDownload
+                imageName={builtImageName || "vm-image"}
+                imageSize="~900 MB"
                 onDownload={() => completeStep("download")}
               />
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
         )}
       </main>
 
-      <ChatInput 
-        onSend={handleSendMessage} 
-        isLoading={isLoading || currentStep === "orchestration"} 
+      <ChatInput
+        onSend={handleSendMessage}
+        isLoading={isLoading || currentStep === "orchestration"}
         placeholder={getPlaceholder(currentStep, imageConfig)}
       />
     </div>
@@ -285,7 +283,9 @@ function getPlaceholder(step: WorkflowStep, config: ImageConfig | null): string 
     case "request":
       return "Describe the VM image you want to create..."
     case "validation":
-      return config ? "Type 'yes' to confirm and start the build, or describe changes..." : "Describe your image requirements..."
+      return config
+        ? "Type 'yes' to confirm and start the build, or describe changes..."
+        : "Describe your image requirements..."
     case "orchestration":
       return "Build in progress..."
     case "ready":
@@ -293,104 +293,5 @@ function getPlaceholder(step: WorkflowStep, config: ImageConfig | null): string 
       return "Your image is ready! Type a message or start a new build..."
     default:
       return "Type a message..."
-  }
-}
-
-function generateResponse(
-  userInput: string, 
-  currentStep: WorkflowStep,
-  existingConfig: ImageConfig | null
-): { content: string; action?: Message["action"]; newConfig?: ImageConfig; nextStep?: WorkflowStep } {
-  const input = userInput.toLowerCase()
-
-  // Handle confirmation to start build
-  if (currentStep === "validation" && existingConfig) {
-    if (input === "yes" || input.includes("confirm") || input.includes("proceed") || input.includes("start") || input.includes("build")) {
-      return {
-        content: `**Starting Automated Build Pipeline**
-
-Your configuration has been validated and approved. The orchestration system is now building your image.
-
-Please wait while I:
-1. Select the appropriate base template
-2. Provision the virtual machine
-3. Install the operating system
-4. Install requested packages
-5. Apply security hardening
-6. Run compliance scans
-7. Register the final image
-
-This process typically takes 2-5 minutes...`,
-        action: "building",
-        nextStep: "orchestration",
-      }
-    }
-  }
-
-  // Parse request and create config
-  if (currentStep === "request" || currentStep === "validation") {
-    const newConfig: ImageConfig = {
-      os: "Ubuntu",
-      version: "22.04 LTS",
-      packages: [],
-      cpu: 4,
-      ram: 8,
-      storage: 100,
-    }
-
-    if (input.includes("ubuntu")) newConfig.os = "Ubuntu"
-    if (input.includes("centos")) newConfig.os = "CentOS"
-    if (input.includes("rhel") || input.includes("red hat")) newConfig.os = "RHEL"
-    if (input.includes("windows")) newConfig.os = "Windows Server"
-    
-    if (input.includes("docker")) newConfig.packages.push("Docker CE", "Docker Compose")
-    if (input.includes("python")) newConfig.packages.push("Python 3.11", "pip", "virtualenv")
-    if (input.includes("node")) newConfig.packages.push("Node.js 20 LTS", "npm")
-    if (input.includes("git")) newConfig.packages.push("Git")
-    if (input.includes("nginx")) newConfig.packages.push("Nginx")
-    if (input.includes("ssh")) newConfig.packages.push("OpenSSH Server")
-    
-    if (newConfig.packages.length === 0) {
-      newConfig.packages.push("Basic utilities", "SSH Server")
-    }
-
-    return {
-      content: `**Configuration Validated**
-
-I've analyzed your request and created the following image specification:
-
-| Parameter | Value |
-|-----------|-------|
-| **Operating System** | ${newConfig.os} ${newConfig.version} |
-| **Architecture** | x86_64 (AMD64) |
-| **vCPU** | ${newConfig.cpu} cores |
-| **Memory** | ${newConfig.ram} GB RAM |
-| **Storage** | ${newConfig.storage} GB |
-| **Packages** | ${newConfig.packages.join(", ")} |
-| **Security** | CIS Benchmark hardening enabled |
-| **Compliance** | Automated security scan included |
-
-**Validation Status:** All checks passed
-- Operating system supported
-- Resource allocation valid
-- All packages available
-- Security policies verified
-
-**Type "yes" to confirm and start the automated build**, or describe any changes you'd like to make.`,
-      action: "confirm_build",
-      newConfig,
-      nextStep: "validation",
-    }
-  }
-
-  return {
-    content: `I understand you want to create a custom VM image. Let me help you configure it.
-
-Please describe:
-- **Operating System** (Ubuntu, CentOS, RHEL, Windows Server)
-- **Required Software** (Docker, Python, Node.js, etc.)
-- **Any specific requirements** (security hardening, compliance needs)
-
-For example: "I need an Ubuntu 22.04 image with Docker and Python for a development environment"`,
   }
 }
