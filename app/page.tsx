@@ -31,6 +31,7 @@ interface ImageConfig {
 
 export default function ChatPage() {
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("captcha")
+  const [currentPhase, setCurrentPhase] = useState<string>("")
   const [completedSteps, setCompletedSteps] = useState<WorkflowStep[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -84,6 +85,7 @@ export default function ChatPage() {
       try {
         const res = await fetch(`${API_BASE}/jobs/${jobId}`)
         const job = await res.json()
+        setCurrentPhase(job.phase || "")
         const status = job.status
 
         // Rough visual progress: creeps up while running, full on completion.
@@ -259,18 +261,7 @@ export default function ChatPage() {
             )}
 
             {currentStep === "orchestration" && (
-              <div className="my-4 p-4 rounded-lg border border-border bg-card">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium">Build Progress</span>
-                  <span className="text-sm text-muted-foreground">{buildProgress}%</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-500"
-                    style={{ width: `${buildProgress}%` }}
-                  />
-                </div>
-              </div>
+              <PhaseChecklist current={currentPhase} />
             )}
 
             {imageReady && currentStep === "download" && (
@@ -314,3 +305,43 @@ function getPlaceholder(step: WorkflowStep, config: ImageConfig | null): string 
       return "Type a message..."
   }
 }
+
+const PHASES = [
+  { key: "fetching_base", label: "Fetching base image" },
+  { key: "booting_vm", label: "Booting VM & configuring resources" },
+  { key: "installing_packages", label: "Installing packages" },
+  { key: "storing_image", label: "Storing image" },
+  { key: "completed", label: "Complete" },
+]
+
+function PhaseChecklist({ current }: { current: string }) {
+  const currentIdx = PHASES.findIndex((p) => p.key === current)
+  return (
+    <div className="my-4 p-4 rounded-lg border border-border bg-card space-y-2">
+      <div className="text-sm font-medium mb-2">Build Progress</div>
+      {PHASES.map((p, i) => {
+        const done = current === "completed" || (currentIdx > -1 && currentIdx > i)
+        const active = currentIdx === i && current !== "completed"
+        return (
+          <div key={p.key} className="flex items-center gap-2 text-sm">
+            <span
+              className={
+                done
+                  ? "text-green-600"
+                  : active
+                  ? "text-primary"
+                  : "text-muted-foreground"
+              }
+            >
+              {done ? "✓" : active ? "⏳" : "○"}
+            </span>
+            <span className={done || active ? "text-foreground" : "text-muted-foreground"}>
+              {p.label}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
