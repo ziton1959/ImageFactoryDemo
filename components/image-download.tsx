@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Download, Check, FileArchive, Shield, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -14,6 +14,14 @@ export function ImageDownload({ imageName, imageSize, onDownload }: ImageDownloa
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadComplete, setDownloadComplete] = useState(false)
   const API_BASE = "http://10.202.135.233:8000"
+  const [realSize, setRealSize] = useState<string>("…")
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/downloads/${encodeURIComponent(imageName)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setRealSize(`${d.size_mb} MB`) })
+      .catch(() => {})
+  }, [imageName])
 
 const handleDownload = async () => {
   setIsDownloading(true)
@@ -49,24 +57,17 @@ const handleDownload = async () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6 py-4 border-y border-border">
+      <div className="grid grid-cols-2 gap-4 mb-6 py-4 border-y border-border">
         <div className="text-center">
-          <div className="text-lg font-semibold text-foreground">{imageSize}</div>
+          <div className="text-lg font-semibold text-foreground">{realSize}</div>
           <div className="text-xs text-muted-foreground">File Size</div>
         </div>
         <div className="text-center">
           <div className="flex items-center justify-center gap-1">
-            <Shield className="w-4 h-4 text-primary" />
-            <span className="text-lg font-semibold text-foreground">Verified</span>
-          </div>
-          <div className="text-xs text-muted-foreground">Checksum</div>
-        </div>
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-1">
             <Clock className="w-4 h-4 text-muted-foreground" />
-            <span className="text-lg font-semibold text-foreground">30 days</span>
+            <span className="text-lg font-semibold text-foreground">1 hour</span>
           </div>
-          <div className="text-xs text-muted-foreground">Available</div>
+          <div className="text-xs text-muted-foreground">Link valid for</div>
         </div>
       </div>
 
@@ -90,7 +91,7 @@ const handleDownload = async () => {
           ) : (
             <>
               <Download className="w-5 h-5" />
-              Download OVA
+              Download qcow2
             </>
           )}
         </Button>
