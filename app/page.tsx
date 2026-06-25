@@ -43,7 +43,18 @@ export default function ChatPage() {
   const [builtImageName, setBuiltImageName] = useState<string>("")
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
-
+  const resetChat = () => {
+  setMessages([])
+  setImageConfig(null)
+  setImageReady(false)
+  setBuildProgress(0)
+  setCurrentPhase("")
+  setCurrentJobId(null)
+  setBuiltImageName("")
+  setIsLoading(false)
+  setCompletedSteps(["captcha"])   // keep captcha passed
+  setCurrentStep("request")        // back to the prompt step
+}
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
@@ -239,7 +250,7 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <ChatHeader />
+      <ChatHeader onNewChat={resetChat} />
       <WorkflowSteps currentStep={currentStep} completedSteps={completedSteps} />
 
       <main className="flex-1 overflow-y-auto">
