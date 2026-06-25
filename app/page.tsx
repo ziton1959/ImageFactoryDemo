@@ -316,31 +316,79 @@ const PHASES = [
 
 function PhaseChecklist({ current }: { current: string }) {
   const currentIdx = PHASES.findIndex((p) => p.key === current)
+  const doneCount = current === "completed" ? PHASES.length : Math.max(currentIdx, 0)
+
   return (
-    <div className="my-4 p-4 rounded-lg border border-border bg-card space-y-2">
-      <div className="text-sm font-medium mb-2">Build Progress</div>
-      {PHASES.map((p, i) => {
-        const done = current === "completed" || (currentIdx > -1 && currentIdx > i)
-        const active = currentIdx === i && current !== "completed"
-        return (
-          <div key={p.key} className="flex items-center gap-2 text-sm">
-            <span
-              className={
-                done
-                  ? "text-green-600"
-                  : active
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              }
-            >
-              {done ? "✓" : active ? "⏳" : "○"}
-            </span>
-            <span className={done || active ? "text-foreground" : "text-muted-foreground"}>
-              {p.label}
-            </span>
-          </div>
-        )
-      })}
+    <div className="my-4 rounded-xl border border-border bg-card p-5 max-w-md">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">Building your image</span>
+        </div>
+        <span className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
+          {Math.min(doneCount, PHASES.length)} of {PHASES.length}
+        </span>
+      </div>
+
+      <div className="flex flex-col">
+        {PHASES.map((p, i) => {
+          const done = current === "completed" || (currentIdx > -1 && currentIdx > i)
+          const active = currentIdx === i && current !== "completed"
+          const isLast = i === PHASES.length - 1
+
+          return (
+            <div key={p.key}>
+              <div className="flex items-center gap-3 py-1.5">
+                {/* status circle */}
+                {done ? (
+                  <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                    <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path d="M5 12l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                ) : active ? (
+                  <div className="w-7 h-7 shrink-0 relative">
+                    <svg className="w-7 h-7" viewBox="0 0 28 28">
+                      <circle cx="14" cy="14" r="12" fill="none" stroke="currentColor" className="text-border" strokeWidth="2.5" />
+                      <circle
+                        cx="14" cy="14" r="12" fill="none"
+                        stroke="currentColor" className="text-primary origin-center"
+                        strokeWidth="2.5" strokeLinecap="round" strokeDasharray="30 45"
+                        style={{ animation: "spin 1s linear infinite", transformOrigin: "center" }}
+                      />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className="w-7 h-7 rounded-full border-[1.5px] border-dashed border-border flex items-center justify-center shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                  </div>
+                )}
+
+                {/* label */}
+                <span
+                  className={`text-sm transition-colors duration-300 ${
+                    done ? "text-foreground" : active ? "text-foreground font-medium" : "text-muted-foreground/60"
+                  }`}
+                >
+                  {p.label}
+                </span>
+
+                {/* right-side status */}
+                {active && (
+                  <span className="ml-auto text-[11px] text-primary">running…</span>
+                )}
+              </div>
+
+              {!isLast && (
+                <div
+                  className={`w-0.5 h-2.5 ml-[13px] transition-colors duration-300 ${
+                    done ? "bg-green-600/35" : "bg-border"
+                  }`}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
