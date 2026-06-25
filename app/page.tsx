@@ -40,6 +40,7 @@ export default function ChatPage() {
   // The real job id returned by the backend when the build was created.
   const [currentJobId, setCurrentJobId] = useState<number | null>(null)
   const [builtImageName, setBuiltImageName] = useState<string>("")
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -58,6 +59,7 @@ export default function ChatPage() {
     completeStep("captcha")
     setCurrentStep("request")
   }
+
 
   const addAssistant = (content: string, action?: Message["action"]) => {
     setMessages((prev) => [
@@ -88,10 +90,12 @@ export default function ChatPage() {
         elapsed += 5
         if (status === "completed") {
           clearInterval(interval)
+
           setBuildProgress(100)
           completeStep("orchestration")
           setCurrentStep("ready")
           setImageReady(true)
+
 
           const name = job.template || builtImageName || "vm-image"
           setBuiltImageName(name)
@@ -126,9 +130,11 @@ export default function ChatPage() {
             `**Could not reach the build service.** The job may still be running on the server. Check job status manually.`,
           )
         }
+
       }
     }, 5000)
   }
+
 
   const handleSendMessage = async (content: string) => {
     const userMessage: Message = {
@@ -137,13 +143,16 @@ export default function ChatPage() {
       content,
       timestamp: new Date(),
     }
+
     setMessages((prev) => [...prev, userMessage])
     setIsLoading(true)
 
     try {
+
       // Confirmation step: build was already created on first submit;
       // here we just start polling the real job.
       if (currentStep === "validation" && imageConfig && currentJobId !== null) {
+
         const input = content.toLowerCase()
         if (
           input === "yes" ||
@@ -152,6 +161,7 @@ export default function ChatPage() {
           input.includes("start") ||
           input.includes("build")
         ) {
+
           addAssistant(
             `**Starting Automated Build Pipeline**\n\nThe orchestration system is building your image (job ${currentJobId}). This typically takes 2-5 minutes...`,
             "building",
@@ -159,17 +169,22 @@ export default function ChatPage() {
           completeStep("validation")
           pollJob(currentJobId)
           setIsLoading(false)
+
           return
         }
       }
 
+
       // Initial prompt: create the build on the backend.
       const response = await fetch(`${API_BASE}/api/vm/create`, {
+
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: content, owner_id: 1 }),
       })
+
       const data = await response.json()
+
 
       if (data.error || data.status === "failed") {
         throw new Error(data.error || "request failed")
@@ -190,6 +205,7 @@ export default function ChatPage() {
       completeStep("request")
       setCurrentStep("validation")
 
+
       addAssistant(
         `**Configuration Validated**\n\n` +
           `I parsed your request into this specification:\n\n` +
@@ -209,6 +225,7 @@ export default function ChatPage() {
       addAssistant(
         `Sorry, I encountered an error processing your request. Please try again.`,
       )
+
     } finally {
       setIsLoading(false)
     }
@@ -258,8 +275,10 @@ export default function ChatPage() {
 
             {imageReady && currentStep === "download" && (
               <ImageDownload
+
                 imageName={builtImageName || "vm-image"}
                 imageSize="~900 MB"
+
                 onDownload={() => completeStep("download")}
               />
             )}
