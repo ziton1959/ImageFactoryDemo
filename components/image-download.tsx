@@ -13,17 +13,29 @@ interface ImageDownloadProps {
 export function ImageDownload({ imageName, imageSize, onDownload }: ImageDownloadProps) {
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadComplete, setDownloadComplete] = useState(false)
+  const API_BASE = "http://10.202.135.233:8000"
 
-  const handleDownload = () => {
-    setIsDownloading(true)
-    
-    // Simulate download
-    setTimeout(() => {
-      setIsDownloading(false)
-      setDownloadComplete(true)
-      onDownload()
-    }, 2000)
+const handleDownload = async () => {
+  setIsDownloading(true)
+  try {
+    const res = await fetch(`${API_BASE}/api/downloads/${encodeURIComponent(imageName)}`)
+    if (!res.ok) throw new Error("download URL not available")
+    const data = await res.json()
+    // trigger the browser download from the presigned MinIO URL
+    const a = document.createElement("a")
+    a.href = data.url
+    a.download = data.object
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setIsDownloading(false)
+    setDownloadComplete(true)
+    onDownload()
+  } catch (e) {
+    setIsDownloading(false)
+    alert("Could not get download link. The image may not be ready yet.")
   }
+}
 
   return (
     <div className="my-6 p-6 rounded-xl border-2 border-primary bg-primary/5">
@@ -33,7 +45,7 @@ export function ImageDownload({ imageName, imageSize, onDownload }: ImageDownloa
         </div>
         <div>
           <h3 className="font-semibold text-foreground">Your Image is Ready</h3>
-          <p className="text-sm text-muted-foreground">{imageName}.ova</p>
+          <p className="text-sm text-muted-foreground">{imageName}.qcow2</p>
         </div>
       </div>
 
