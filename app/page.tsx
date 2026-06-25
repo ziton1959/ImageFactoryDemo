@@ -162,14 +162,14 @@ export default function ChatPage() {
           input.includes("build")
         ) {
 
-          addAssistant(
+         addAssistant(
             `**Starting Automated Build Pipeline**\n\nThe orchestration system is building your image (job ${currentJobId}). This typically takes 2-5 minutes...`,
             "building",
           )
           completeStep("validation")
+          await fetch(`${API_BASE}/api/vm/build/${currentJobId}`, { method: "POST" })
           pollJob(currentJobId)
           setIsLoading(false)
-
           return
         }
       }
