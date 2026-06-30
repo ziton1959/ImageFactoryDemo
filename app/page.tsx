@@ -5,9 +5,10 @@ import { ChatHeader } from "@/components/chat-header"
 import { ChatMessage } from "@/components/chat-message"
 import { ChatInput } from "@/components/chat-input"
 import { WelcomeScreen } from "@/components/welcome-screen"
-import { CaptchaGate } from "@/components/captcha-gate"
 import { WorkflowSteps, type WorkflowStep } from "@/components/workflow-steps"
 import { ImageDownload } from "@/components/image-download"
+import { AuthGate } from "@/components/auth-gate"
+import { getToken, saveToken, clearToken } from "@/lib/auth"
 
 // Backend base URL — change here if the server IP/port changes.
 const API_BASE = "http://10.202.135.233:8000"
@@ -30,7 +31,8 @@ interface ImageConfig {
 }
 
 export default function ChatPage() {
-  const [currentStep, setCurrentStep] = useState<WorkflowStep>("captcha")
+  const [token, setToken] = useState<string | null>(null)
+  const [currentStep, setCurrentStep] = useState<WorkflowStep>("request")
   const [currentPhase, setCurrentPhase] = useState<string>("")
   const [completedSteps, setCompletedSteps] = useState<WorkflowStep[]>([])
   const [messages, setMessages] = useState<Message[]>([])
@@ -43,18 +45,35 @@ export default function ChatPage() {
   const [builtImageName, setBuiltImageName] = useState<string>("")
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-login if a token is already stored.
+  useEffect(() => {
+    const existing = getToken()
+    if (existing) {
+      setToken(existing)
+      setCurrentStep("request")
+    }
+  }, [])
+
   const resetChat = () => {
-  setMessages([])
-  setImageConfig(null)
-  setImageReady(false)
-  setBuildProgress(0)
-  setCurrentPhase("")
-  setCurrentJobId(null)
-  setBuiltImageName("")
-  setIsLoading(false)
-  setCompletedSteps(["captcha"])   // keep captcha passed
-  setCurrentStep("request")        // back to the prompt step
-}
+    setMessages([])
+    setImageConfig(null)
+    setImageReady(false)
+    setBuildProgress(0)
+    setCurrentPhase("")
+    setCurrentJobId(null)
+    setBuiltImageName("")
+    setIsLoading(false)
+    setCompletedSteps([])
+    setCurrentStep("request")
+  }
+
+  const handleLogout = () => {
+    clearToken()
+    setToken(null)
+    resetChat()
+  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
@@ -66,12 +85,6 @@ export default function ChatPage() {
   const completeStep = (step: WorkflowStep) => {
     setCompletedSteps((prev) => [...prev, step])
   }
-
-  const handleCaptchaVerified = () => {
-    completeStep("captcha")
-    setCurrentStep("request")
-  }
-
 
   const addAssistant = (content: string, action?: Message["action"]) => {
     setMessages((prev) => [
@@ -99,16 +112,13 @@ export default function ChatPage() {
         setCurrentPhase(job.phase || "")
         const status = job.status
 
-        // Rough visual progress: creeps up while running, full on completion.
         elapsed += 5
         if (status === "completed") {
           clearInterval(interval)
-
           setBuildProgress(100)
           completeStep("orchestration")
           setCurrentStep("ready")
           setImageReady(true)
-
 
           const name = job.template || builtImageName || "vm-image"
           setBuiltImageName(name)
@@ -131,11 +141,9 @@ export default function ChatPage() {
             `**Build Failed**\n\nThe build did not complete. Last log output:\n\n\`\`\`\n${err}\n\`\`\``,
           )
         } else {
-          // still running/queued — nudge the progress bar up to ~90% max
           setBuildProgress((p) => (p < 90 ? p + 8 : 90))
         }
       } catch (e) {
-        // network hiccup while polling — keep trying, but cap total wait
         if (elapsed > 600) {
           clearInterval(interval)
           setCurrentStep("validation")
@@ -143,11 +151,9 @@ export default function ChatPage() {
             `**Could not reach the build service.** The job may still be running on the server. Check job status manually.`,
           )
         }
-
       }
     }, 5000)
   }
-
 
   const handleSendMessage = async (content: string) => {
     const userMessage: Message = {
@@ -161,11 +167,8 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
-
-      // Confirmation step: build was already created on first submit;
-      // here we just start polling the real job.
+      // Confirmation step: start the build now that the user confirmed.
       if (currentStep === "validation" && imageConfig && currentJobId !== null) {
-
         const input = content.toLowerCase()
         if (
           input === "yes" ||
@@ -174,30 +177,32 @@ export default function ChatPage() {
           input.includes("start") ||
           input.includes("build")
         ) {
-
-         addAssistant(
+          addAssistant(
             `**Starting Automated Build Pipeline**\n\nThe orchestration system is building your image (job ${currentJobId}). This typically takes 2-5 minutes...`,
             "building",
           )
           completeStep("validation")
-          await fetch(`${API_BASE}/api/vm/build/${currentJobId}`, { method: "POST" })
+          await fetch(`${API_BASE}/api/vm/build/${currentJobId}`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          })
           pollJob(currentJobId)
           setIsLoading(false)
           return
         }
       }
 
-
       // Initial prompt: create the build on the backend.
       const response = await fetch(`${API_BASE}/api/vm/create`, {
-
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: content, owner_id: 1 }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ prompt: content }),
       })
 
       const data = await response.json()
-
 
       if (data.error || data.status === "failed") {
         throw new Error(data.error || "request failed")
@@ -218,7 +223,6 @@ export default function ChatPage() {
       completeStep("request")
       setCurrentStep("validation")
 
-
       addAssistant(
         `**Configuration Validated**\n\n` +
           `I parsed your request into this specification:\n\n` +
@@ -238,19 +242,26 @@ export default function ChatPage() {
       addAssistant(
         `Sorry, I encountered an error processing your request. Please try again.`,
       )
-
     } finally {
       setIsLoading(false)
     }
   }
 
-  if (currentStep === "captcha" && !completedSteps.includes("captcha")) {
-    return <CaptchaGate onVerified={handleCaptchaVerified} />
+  if (!token) {
+    return (
+      <AuthGate
+        onAuthenticated={(t) => {
+          saveToken(t)
+          setToken(t)
+          setCurrentStep("request")
+        }}
+      />
+    )
   }
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <ChatHeader onNewChat={resetChat} />
+      <ChatHeader onNewChat={resetChat} onLogout={handleLogout} />
       <WorkflowSteps currentStep={currentStep} completedSteps={completedSteps} />
 
       <main className="flex-1 overflow-y-auto">
@@ -277,10 +288,8 @@ export default function ChatPage() {
 
             {imageReady && currentStep === "download" && (
               <ImageDownload
-
                 imageName={builtImageName || "vm-image"}
                 imageSize="~900 MB"
-
                 onDownload={() => completeStep("download")}
               />
             )}
@@ -349,7 +358,6 @@ function PhaseChecklist({ current }: { current: string }) {
           return (
             <div key={p.key}>
               <div className="flex items-center gap-3 py-1.5">
-                {/* status circle */}
                 {done ? (
                   <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                     <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -362,7 +370,7 @@ function PhaseChecklist({ current }: { current: string }) {
                       <circle cx="14" cy="14" r="12" fill="none" stroke="currentColor" className="text-border" strokeWidth="2.5" />
                       <circle
                         cx="14" cy="14" r="12" fill="none"
-                        stroke="currentColor" className="text-primary origin-center"
+                        stroke="currentColor" className="text-primary"
                         strokeWidth="2.5" strokeLinecap="round" strokeDasharray="30 45"
                         style={{ animation: "spin 1s linear infinite", transformOrigin: "center" }}
                       />
@@ -374,7 +382,6 @@ function PhaseChecklist({ current }: { current: string }) {
                   </div>
                 )}
 
-                {/* label */}
                 <span
                   className={`text-sm transition-colors duration-300 ${
                     done ? "text-foreground" : active ? "text-foreground font-medium" : "text-muted-foreground/60"
@@ -383,7 +390,6 @@ function PhaseChecklist({ current }: { current: string }) {
                   {p.label}
                 </span>
 
-                {/* right-side status */}
                 {active && (
                   <span className="ml-auto text-[11px] text-primary">running…</span>
                 )}
@@ -403,4 +409,3 @@ function PhaseChecklist({ current }: { current: string }) {
     </div>
   )
 }
-
