@@ -9,6 +9,8 @@ import { WorkflowSteps, type WorkflowStep } from "@/components/workflow-steps"
 import { ImageDownload } from "@/components/image-download"
 import { AuthGate } from "@/components/auth-gate"
 import { getToken, saveToken, clearToken } from "@/lib/auth"
+import { HistorySidebar } from "@/components/history-sidebar"
+import { PanelLeft } from "lucide-react"
 
 // Backend base URL — change here if the server IP/port changes.
 const API_BASE = "http://10.202.135.233:8000"
@@ -43,7 +45,8 @@ export default function ChatPage() {
   // The real job id returned by the backend when the build was created.
   const [currentJobId, setCurrentJobId] = useState<number | null>(null)
   const [builtImageName, setBuiltImageName] = useState<string>("")
-
+const [sidebarOpen, setSidebarOpen] = useState(true)
+const [historyRefresh, setHistoryRefresh] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-login if a token is already stored.
@@ -73,7 +76,29 @@ export default function ChatPage() {
     setToken(null)
     resetChat()
   }
-
+const openHistoryItem = async (jobId: number) => {
+    const res = await fetch(`${API_BASE}/jobs/mine/history/${jobId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+    if (!res.ok) return
+    const d = await res.json()
+    const s = d.spec || {}
+    setBuiltImageName(s.template_name || "vm-image")
+    addAssistant(
+      `**Build #${d.job_id}** — ${d.status}\n\n` +
+        `| Parameter | Value |\n|---|---|\n` +
+        `| **OS** | ${s.os || "?"} |\n` +
+        `| **vCPU** | ${s.cpu ?? "?"} |\n` +
+        `| **RAM** | ${s.ram_gb ?? "?"} GB |\n` +
+        `| **Packages** | ${(s.packages || []).join(", ") || "none"} |\n` +
+        `| **Template** | ${s.template_name || "?"} |`,
+      d.status === "completed" ? "ready" : undefined,
+    )
+    if (d.status === "completed") {
+      setImageReady(true)
+      setCurrentStep("download")
+    }
+  }
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
@@ -133,6 +158,7 @@ export default function ChatPage() {
           )
           completeStep("ready")
           setCurrentStep("download")
+          setHistoryRefresh((k) => k + 1)   // ← add this
         } else if (status === "failed") {
           clearInterval(interval)
           setCurrentStep("validation")
@@ -260,50 +286,73 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <ChatHeader onNewChat={resetChat} onLogout={handleLogout} />
-      <WorkflowSteps currentStep={currentStep} completedSteps={completedSteps} />
-
-      <main className="flex-1 overflow-y-auto">
-        {messages.length === 0 ? (
-          <WelcomeScreen onSuggestionClick={handleSendMessage} />
-        ) : (
-          <div className="max-w-3xl mx-auto px-4 py-6">
-            {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
-            ))}
-
-            {isLoading && (
-              <div className="flex items-center gap-2 py-4">
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-                </div>
-                <span className="text-muted-foreground text-sm">Processing...</span>
-              </div>
-            )}
-
-            {currentStep === "orchestration" && (
-              <PhaseChecklist current={currentPhase} />
-            )}
-
-            {imageReady && currentStep === "download" && (
-              <ImageDownload
-                imageName={builtImageName || "vm-image"}
-                imageSize="~900 MB"
-                onDownload={() => completeStep("download")}
-              />
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-        )}
-      </main>
-
-      <ChatInput
-        onSend={handleSendMessage}
-        isLoading={isLoading || currentStep === "orchestration"}
-        placeholder={getPlaceholder(currentStep, imageConfig)}
+    <div className="flex h-screen bg-background">
+      <HistorySidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((o) => !o)}
+        onSelect={openHistoryItem}
+        refreshKey={historyRefresh}
       />
+
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex items-center">
+          {!sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="pl-3 text-muted-foreground hover:text-foreground"
+              title="Show history"
+            >
+              <PanelLeft className="w-5 h-5" />
+            </button>
+          )}
+          <div className="flex-1">
+            <ChatHeader onNewChat={resetChat} onLogout={handleLogout} />
+          </div>
+        </div>
+
+        <WorkflowSteps currentStep={currentStep} completedSteps={completedSteps} />
+
+        <main className="flex-1 overflow-y-auto">
+          {messages.length === 0 ? (
+            <WelcomeScreen onSuggestionClick={handleSendMessage} />
+          ) : (
+            <div className="max-w-3xl mx-auto px-4 py-6">
+              {messages.map((message) => (
+                <ChatMessage key={message.id} message={message} />
+              ))}
+
+              {isLoading && (
+                <div className="flex items-center gap-2 py-4">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  </div>
+                  <span className="text-muted-foreground text-sm">Processing...</span>
+                </div>
+              )}
+
+              {currentStep === "orchestration" && (
+                <PhaseChecklist current={currentPhase} />
+              )}
+
+              {imageReady && currentStep === "download" && (
+                <ImageDownload
+                  imageName={builtImageName || "vm-image"}
+                  imageSize="~900 MB"
+                  onDownload={() => completeStep("download")}
+                />
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+        </main>
+
+        <ChatInput
+          onSend={handleSendMessage}
+          isLoading={isLoading || currentStep === "orchestration"}
+          placeholder={getPlaceholder(currentStep, imageConfig)}
+        />
+      </div>
     </div>
   )
 }
