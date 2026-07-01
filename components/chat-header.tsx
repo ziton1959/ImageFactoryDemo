@@ -1,12 +1,13 @@
 import { Button } from "@/components/ui/button"
-import { Plus, Menu, Settings } from "lucide-react"
+import { Plus, Menu, Settings, LogOut } from "lucide-react"
 import Image from "next/image"
 
 interface ChatHeaderProps {
   onNewChat?: () => void
+  onLogout?: () => void
 }
 
-export function ChatHeader({ onNewChat }: ChatHeaderProps) {
+export function ChatHeader({ onNewChat, onLogout }: ChatHeaderProps) {
   return (
     <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
       <div className="flex items-center gap-3">
@@ -42,6 +43,10 @@ export function ChatHeader({ onNewChat }: ChatHeaderProps) {
         <Button variant="ghost" size="icon">
           <Settings className="w-5 h-5" />
           <span className="sr-only">Settings</span>
+        </Button>
+        <Button variant="ghost" size="icon" onClick={onLogout} title="Sign out">
+          <LogOut className="w-5 h-5" />
+          <span className="sr-only">Sign out</span>
         </Button>
       </div>
     </header>
