@@ -230,9 +230,17 @@ const openHistoryItem = async (jobId: number) => {
 
       const data = await response.json()
 
-      if (data.error || data.status === "failed") {
-        throw new Error(data.error || "request failed")
+      if (data.error) {
+       const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.error,
+        timestamp: new Date(),
       }
+      setMessages((prev) => [...prev, errorMessage])
+      setIsLoading(false)
+      return
+    }
 
       const spec = data.spec
       const newConfig: ImageConfig = {
