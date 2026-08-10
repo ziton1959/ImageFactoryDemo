@@ -8,11 +8,10 @@ import { WelcomeScreen } from "@/components/welcome-screen"
 import { WorkflowSteps, type WorkflowStep } from "@/components/workflow-steps"
 import { ImageDownload } from "@/components/image-download"
 import { AuthGate } from "@/components/auth-gate"
-import { getToken, saveToken, clearToken } from "@/lib/auth"
 import { HistorySidebar } from "@/components/history-sidebar"
+import { getToken, saveToken, clearToken } from "@/lib/auth"
 import { PanelLeft } from "lucide-react"
 
-// Backend base URL — change here if the server IP/port changes.
 const API_BASE = "http://10.202.135.233:8000"
 
 export interface Message {
@@ -42,14 +41,17 @@ export default function ChatPage() {
   const [imageConfig, setImageConfig] = useState<ImageConfig | null>(null)
   const [buildProgress, setBuildProgress] = useState(0)
   const [imageReady, setImageReady] = useState(false)
-  // The real job id returned by the backend when the build was created.
   const [currentJobId, setCurrentJobId] = useState<number | null>(null)
   const [builtImageName, setBuiltImageName] = useState<string>("")
-const [sidebarOpen, setSidebarOpen] = useState(true)
-const [historyRefresh, setHistoryRefresh] = useState(0)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [historyRefresh, setHistoryRefresh] = useState(0)
+
+  // Interactive question state
+  const [pendingQuestions, setPendingQuestions] = useState<any[]>([])
+  const [pendingSpec, setPendingSpec] = useState<any>(null)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto-login if a token is already stored.
   useEffect(() => {
     const existing = getToken()
     if (existing) {
@@ -69,6 +71,8 @@ const [historyRefresh, setHistoryRefresh] = useState(0)
     setIsLoading(false)
     setCompletedSteps([])
     setCurrentStep("request")
+    setPendingQuestions([])
+    setPendingSpec(null)
   }
 
   const handleLogout = () => {
@@ -76,36 +80,14 @@ const [historyRefresh, setHistoryRefresh] = useState(0)
     setToken(null)
     resetChat()
   }
-const openHistoryItem = async (jobId: number) => {
-    const res = await fetch(`${API_BASE}/jobs/mine/history/${jobId}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
-    if (!res.ok) return
-    const d = await res.json()
-    const s = d.spec || {}
-    setBuiltImageName(s.template_name || "vm-image")
-    addAssistant(
-      `**Build #${d.job_id}** — ${d.status}\n\n` +
-        `| Parameter | Value |\n|---|---|\n` +
-        `| **OS** | ${s.os || "?"} |\n` +
-        `| **vCPU** | ${s.cpu ?? "?"} |\n` +
-        `| **RAM** | ${s.ram_gb ?? "?"} GB |\n` +
-        `| **Packages** | ${(s.packages || []).join(", ") || "none"} |\n` +
-        `| **Template** | ${s.template_name || "?"} |`,
-      d.status === "completed" ? "ready" : undefined,
-    )
-    if (d.status === "completed") {
-      setImageReady(true)
-      setCurrentStep("download")
-    }
-  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, pendingQuestions])
 
   const completeStep = (step: WorkflowStep) => {
     setCompletedSteps((prev) => [...prev, step])
@@ -124,11 +106,112 @@ const openHistoryItem = async (jobId: number) => {
     ])
   }
 
-  // Poll the real backend job until it finishes or fails.
+  const addUser = (content: string) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        role: "user",
+        content,
+        timestamp: new Date(),
+      },
+    ])
+  }
+
+  // Present the confirmation table for a fully-resolved spec.
+  const showConfirmation = (data: any) => {
+    const s = data.spec
+    setImageConfig({
+      os: s.os,
+      version: "",
+      packages: s.packages,
+      cpu: s.cpu,
+      ram: s.ram_gb,
+      storage: 100,
+    })
+    setCurrentJobId(data.job_id)
+    setBuiltImageName(s.template_name || "")
+    completeStep("request")
+    setCurrentStep("validation")
+    addAssistant(
+      `**Configuration Validated**\n\n` +
+        `| Parameter | Value |\n|-----------|-------|\n` +
+        `| **Operating System** | ${s.os} |\n` +
+        `| **vCPU** | ${s.cpu} cores |\n` +
+        `| **Memory** | ${s.ram_gb} GB RAM |\n` +
+        `| **Packages** | ${s.packages.join(", ") || "none"} |\n` +
+        `| **Template** | ${s.template_name} |\n` +
+        `| **Job ID** | ${data.job_id} |\n\n` +
+        `**Type "yes" to confirm and start the build**, or describe any changes.`,
+      "confirm_build",
+    )
+  }
+
+  // Resubmit an accumulated spec back to the backend.
+  const submitCompleteSpec = async (spec: any) => {
+    setIsLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/vm/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prompt: "", partial_spec: spec }),
+      })
+      const data = await res.json()
+      setIsLoading(false)
+
+      if (data.status === "needs_input") {
+        setPendingSpec(data.partial_spec)
+        setPendingQuestions(data.questions)
+        addAssistant(`**${data.questions[0].question}**`)
+        return
+      }
+      if (data.error || data.status === "failed") {
+        addAssistant(`Sorry, I couldn't complete that: ${data.error || "unknown error"}`)
+        return
+      }
+      // complete
+      setPendingQuestions([])
+      setPendingSpec(null)
+      showConfirmation(data)
+    } catch {
+      setIsLoading(false)
+      addAssistant("Sorry, I encountered an error. Please try again.")
+    }
+  }
+
+  // Handle a chip click answering the current question.
+  const answerQuestion = async (question: any, value: any) => {
+    const updated = { ...pendingSpec }
+
+    if (question.field === "packages_extra") {
+      if (value) updated.packages = [...(updated.packages || []), value]
+    } else if (question.type === "package_clarify") {
+      updated.packages = (updated.packages || []).filter(
+        (p: string) => p.toLowerCase() !== question.package,
+      )
+      if (value) updated.packages.push(value)
+    } else {
+      updated[question.field] = value
+    }
+
+    const chosen = question.options.find((o: any) => o.value === value)
+    addUser(chosen?.label || String(value))
+
+    const remaining = pendingQuestions.slice(1)
+    setPendingSpec(updated)
+
+    if (remaining.length > 0) {
+      setPendingQuestions(remaining)
+      addAssistant(`**${remaining[0].question}**`)
+    } else {
+      setPendingQuestions([])
+      await submitCompleteSpec(updated)
+    }
+  }
+
   const pollJob = (jobId: number) => {
     setCurrentStep("orchestration")
     setBuildProgress(0)
-
     let elapsed = 0
     const interval = setInterval(async () => {
       try {
@@ -136,7 +219,6 @@ const openHistoryItem = async (jobId: number) => {
         const job = await res.json()
         setCurrentPhase(job.phase || "")
         const status = job.status
-
         elapsed += 5
         if (status === "completed") {
           clearInterval(interval)
@@ -144,7 +226,7 @@ const openHistoryItem = async (jobId: number) => {
           completeStep("orchestration")
           setCurrentStep("ready")
           setImageReady(true)
-
+          setHistoryRefresh((k) => k + 1)
           const name = job.template || builtImageName || "vm-image"
           setBuiltImageName(name)
           addAssistant(
@@ -158,7 +240,6 @@ const openHistoryItem = async (jobId: number) => {
           )
           completeStep("ready")
           setCurrentStep("download")
-          setHistoryRefresh((k) => k + 1)   // ← add this
         } else if (status === "failed") {
           clearInterval(interval)
           setCurrentStep("validation")
@@ -173,23 +254,14 @@ const openHistoryItem = async (jobId: number) => {
         if (elapsed > 600) {
           clearInterval(interval)
           setCurrentStep("validation")
-          addAssistant(
-            `**Could not reach the build service.** The job may still be running on the server. Check job status manually.`,
-          )
+          addAssistant(`**Could not reach the build service.** The job may still be running on the server.`)
         }
       }
     }, 5000)
   }
 
   const handleSendMessage = async (content: string) => {
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content,
-      timestamp: new Date(),
-    }
-
-    setMessages((prev) => [...prev, userMessage])
+    addUser(content)
     setIsLoading(true)
 
     try {
@@ -218,56 +290,31 @@ const openHistoryItem = async (jobId: number) => {
         }
       }
 
-      // Initial prompt: create the build on the backend.
+      // Initial prompt
       const response = await fetch(`${API_BASE}/api/vm/create`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ prompt: content }),
       })
-
       const data = await response.json()
+
+      // Interactive: backend needs more info
+      if (data.status === "needs_input") {
+        setPendingSpec(data.partial_spec)
+        setPendingQuestions(data.questions)
+        addAssistant(`I need a bit more detail:\n\n**${data.questions[0].question}**`)
+        setIsLoading(false)
+        return
+      }
 
       if (data.error || data.status === "failed") {
         throw new Error(data.error || "request failed")
       }
 
-      const spec = data.spec
-      const newConfig: ImageConfig = {
-        os: spec.os,
-        version: "",
-        packages: spec.packages,
-        cpu: spec.cpu,
-        ram: spec.ram_gb,
-        storage: 100,
-      }
-      setImageConfig(newConfig)
-      setCurrentJobId(data.job_id)
-      setBuiltImageName(spec.template_name || "")
-      completeStep("request")
-      setCurrentStep("validation")
-
-      addAssistant(
-        `**Configuration Validated**\n\n` +
-          `I parsed your request into this specification:\n\n` +
-          `| Parameter | Value |\n` +
-          `|-----------|-------|\n` +
-          `| **Operating System** | ${spec.os} |\n` +
-          `| **vCPU** | ${spec.cpu} cores |\n` +
-          `| **Memory** | ${spec.ram_gb} GB RAM |\n` +
-          `| **Packages** | ${spec.packages.join(", ") || "none"} |\n` +
-          `| **Template** | ${spec.template_name} |\n` +
-          `| **Job ID** | ${data.job_id} |\n` +
-          `| **VM ID** | ${data.vm_id} |\n\n` +
-          `**Type "yes" to confirm and start the build**, or describe any changes.`,
-        "confirm_build",
-      )
+      // Complete right away (fully specified prompt)
+      showConfirmation(data)
     } catch (error) {
-      addAssistant(
-        `Sorry, I encountered an error processing your request. Please try again.`,
-      )
+      addAssistant(`Sorry, I encountered an error processing your request. Please try again.`)
     } finally {
       setIsLoading(false)
     }
@@ -290,7 +337,7 @@ const openHistoryItem = async (jobId: number) => {
       <HistorySidebar
         open={sidebarOpen}
         onToggle={() => setSidebarOpen((o) => !o)}
-        onSelect={openHistoryItem}
+        onSelect={() => {}}
         refreshKey={historyRefresh}
       />
 
@@ -321,6 +368,21 @@ const openHistoryItem = async (jobId: number) => {
                 <ChatMessage key={message.id} message={message} />
               ))}
 
+              {/* Interactive question chips */}
+              {pendingQuestions.length > 0 && (
+                <div className="my-3 flex flex-wrap gap-2">
+                  {pendingQuestions[0].options.map((opt: any, i: number) => (
+                    <button
+                      key={i}
+                      onClick={() => answerQuestion(pendingQuestions[0], opt.value)}
+                      className="px-4 py-2 rounded-full border border-primary text-primary text-sm font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {isLoading && (
                 <div className="flex items-center gap-2 py-4">
                   <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
@@ -330,9 +392,7 @@ const openHistoryItem = async (jobId: number) => {
                 </div>
               )}
 
-              {currentStep === "orchestration" && (
-                <PhaseChecklist current={currentPhase} />
-              )}
+              {currentStep === "orchestration" && <PhaseChecklist current={currentPhase} />}
 
               {imageReady && currentStep === "download" && (
                 <ImageDownload
@@ -390,9 +450,7 @@ function PhaseChecklist({ current }: { current: string }) {
   return (
     <div className="my-4 rounded-xl border border-border bg-card p-5 max-w-md">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground">Building your image</span>
-        </div>
+        <span className="text-sm font-medium text-foreground">Building your image</span>
         <span className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">
           {Math.min(doneCount, PHASES.length)} of {PHASES.length}
         </span>
@@ -430,7 +488,6 @@ function PhaseChecklist({ current }: { current: string }) {
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
                   </div>
                 )}
-
                 <span
                   className={`text-sm transition-colors duration-300 ${
                     done ? "text-foreground" : active ? "text-foreground font-medium" : "text-muted-foreground/60"
@@ -438,12 +495,8 @@ function PhaseChecklist({ current }: { current: string }) {
                 >
                   {p.label}
                 </span>
-
-                {active && (
-                  <span className="ml-auto text-[11px] text-primary">running…</span>
-                )}
+                {active && <span className="ml-auto text-[11px] text-primary">running…</span>}
               </div>
-
               {!isLast && (
                 <div
                   className={`w-0.5 h-2.5 ml-[13px] transition-colors duration-300 ${
