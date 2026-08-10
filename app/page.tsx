@@ -297,8 +297,7 @@ export default function ChatPage() {
         body: JSON.stringify({ prompt: content }),
       })
       const data = await response.json()
-
-      // Interactive: backend needs more info
+// Interactive: backend needs more info
       if (data.status === "needs_input") {
         setPendingSpec(data.partial_spec)
         setPendingQuestions(data.questions)
