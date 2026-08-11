@@ -189,7 +189,9 @@ export default function ChatPage() {
     const updated = { ...pendingSpec }
 
     if (question.field === "packages_extra") {
-      if (value) updated.packages = [...(updated.packages || []), value]
+  if (value) updated.packages = [...(updated.packages || []), value]
+  updated._suggested = true
+
     } else if (question.type === "package_clarify") {
       updated.packages = (updated.packages || []).filter(
         (p: string) => p.toLowerCase() !== question.package,
