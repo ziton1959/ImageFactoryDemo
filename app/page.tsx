@@ -92,12 +92,7 @@ export default function ChatPage() {
   const completeStep = (step: WorkflowStep) => {
     setCompletedSteps((prev) => [...prev, step])
   }
-  const THINKING_MESSAGES = [
-  "Understanding your request…",
-  "Analyzing the configuration…",
-  "Checking supported OS and packages…",
-  "Preparing the specification…",
-]
+  
   const addAssistant = (content: string, action?: Message["action"]) => {
     setMessages((prev) => [
       ...prev,
@@ -418,23 +413,7 @@ export default function ChatPage() {
 
 
 
-function ThinkingIndicator() {
-  const [idx, setIdx] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setIdx((i) => (i + 1) % THINKING_MESSAGES.length), 1800)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <div className="flex items-center gap-3 py-4">
-      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-        <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-      </div>
-      <span className="text-muted-foreground text-sm transition-opacity duration-300">
-        {THINKING_MESSAGES[idx]}
-      </span>
-    </div>
-  )
-}
+
 
 function getPlaceholder(step: WorkflowStep, config: ImageConfig | null): string {
   switch (step) {
@@ -461,6 +440,30 @@ const PHASES = [
   { key: "storing_image", label: "Storing image" },
   { key: "completed", label: "Complete" },
 ]
+const THINKING_MESSAGES = [
+  "Understanding your request…",
+  "Analyzing the configuration…",
+  "Checking supported OS and packages…",
+  "Preparing the specification…",
+]
+
+function ThinkingIndicator() {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setIdx((i) => (i + 1) % THINKING_MESSAGES.length), 1800)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div className="flex items-center gap-3 py-4">
+      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+        <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+      </div>
+      <span className="text-muted-foreground text-sm transition-opacity duration-300">
+        {THINKING_MESSAGES[idx]}
+      </span>
+    </div>
+  )
+} 
 
 function PhaseChecklist({ current }: { current: string }) {
   const currentIdx = PHASES.findIndex((p) => p.key === current)
