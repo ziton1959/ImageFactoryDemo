@@ -2,15 +2,17 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Plus, Menu, Settings, LogOut } from "lucide-react"
+import { Plus, Menu, Settings, LogOut, Shield } from "lucide-react"
 import Image from "next/image"
 
 interface ChatHeaderProps {
   onNewChat?: () => void
   onLogout?: () => void
+  isAdmin?: boolean
+  onOpenAdmin?: () => void
 }
 
-export function ChatHeader({ onNewChat, onLogout }: ChatHeaderProps) {
+export function ChatHeader({ onNewChat, onLogout, isAdmin, onOpenAdmin }: ChatHeaderProps) {
   const [confirmingLogout, setConfirmingLogout] = useState(false)
 
   return (
@@ -45,6 +47,19 @@ export function ChatHeader({ onNewChat, onLogout }: ChatHeaderProps) {
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">New Chat</span>
         </Button>
+
+        {isAdmin && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onOpenAdmin}
+            title="Admin dashboard"
+          >
+            <Shield className="w-5 h-5" />
+            <span className="sr-only">Admin dashboard</span>
+          </Button>
+        )}
+
         <Button variant="ghost" size="icon">
           <Settings className="w-5 h-5" />
           <span className="sr-only">Settings</span>

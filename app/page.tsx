@@ -9,6 +9,7 @@ import { WorkflowSteps, type WorkflowStep } from "@/components/workflow-steps"
 import { ImageDownload } from "@/components/image-download"
 import { AuthGate } from "@/components/auth-gate"
 import { HistorySidebar } from "@/components/history-sidebar"
+import { AdminDashboard } from "@/components/admin-dashboard"
 import { getToken, saveToken, clearToken } from "@/lib/auth"
 import { PanelLeft } from "lucide-react"
 
@@ -33,6 +34,8 @@ interface ImageConfig {
 
 export default function ChatPage() {
   const [token, setToken] = useState<string | null>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [showAdmin, setShowAdmin] = useState(false)
   const [currentStep, setCurrentStep] = useState<WorkflowStep>("request")
   const [currentPhase, setCurrentPhase] = useState<string>("")
   const [completedSteps, setCompletedSteps] = useState<WorkflowStep[]>([])
@@ -57,6 +60,11 @@ export default function ChatPage() {
     if (existing) {
       setToken(existing)
       setCurrentStep("request")
+      // load the current user so we know if they're an admin
+      fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${existing}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((u) => setCurrentUser(u))
+        .catch(() => {})
     }
   }, [])
 
@@ -78,6 +86,8 @@ export default function ChatPage() {
   const handleLogout = () => {
     clearToken()
     setToken(null)
+    setCurrentUser(null)
+    setShowAdmin(false)
     resetChat()
   }
 
@@ -92,7 +102,7 @@ export default function ChatPage() {
   const completeStep = (step: WorkflowStep) => {
     setCompletedSteps((prev) => [...prev, step])
   }
-  
+
   const addAssistant = (content: string, action?: Message["action"]) => {
     setMessages((prev) => [
       ...prev,
@@ -118,7 +128,6 @@ export default function ChatPage() {
     ])
   }
 
-  // Present the confirmation table for a fully-resolved spec.
   const showConfirmation = (data: any) => {
     const s = data.spec
     setImageConfig({
@@ -147,7 +156,6 @@ export default function ChatPage() {
     )
   }
 
-  // Resubmit an accumulated spec back to the backend.
   const submitCompleteSpec = async (spec: any) => {
     setIsLoading(true)
     try {
@@ -169,7 +177,6 @@ export default function ChatPage() {
         addAssistant(`Sorry, I couldn't complete that: ${data.error || "unknown error"}`)
         return
       }
-      // complete
       setPendingQuestions([])
       setPendingSpec(null)
       showConfirmation(data)
@@ -179,14 +186,12 @@ export default function ChatPage() {
     }
   }
 
-  // Handle a chip click answering the current question.
   const answerQuestion = async (question: any, value: any) => {
     const updated = { ...pendingSpec }
 
     if (question.field === "packages_extra") {
-  if (value) updated.packages = [...(updated.packages || []), value]
-  updated._suggested = true
-
+      if (value) updated.packages = [...(updated.packages || []), value]
+      updated._suggested = true
     } else if (question.type === "package_clarify") {
       updated.packages = (updated.packages || []).filter(
         (p: string) => p.toLowerCase() !== question.package,
@@ -229,7 +234,7 @@ export default function ChatPage() {
           setCurrentStep("ready")
           setImageReady(true)
           setHistoryRefresh((k) => k + 1)
-          const name = job.template || builtImageName || "vm-image"
+          const name = builtImageName || "vm-image"
           setBuiltImageName(name)
           addAssistant(
             `**Image Build Complete**\n\n` +
@@ -267,7 +272,6 @@ export default function ChatPage() {
     setIsLoading(true)
 
     try {
-      // Confirmation step: start the build now that the user confirmed.
       if (currentStep === "validation" && imageConfig && currentJobId !== null) {
         const input = content.toLowerCase()
         if (
@@ -292,14 +296,13 @@ export default function ChatPage() {
         }
       }
 
-      // Initial prompt
       const response = await fetch(`${API_BASE}/api/vm/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ prompt: content }),
       })
       const data = await response.json()
-// Interactive: backend needs more info
+
       if (data.status === "needs_input") {
         setPendingSpec(data.partial_spec)
         setPendingQuestions(data.questions)
@@ -312,7 +315,6 @@ export default function ChatPage() {
         throw new Error(data.error || "request failed")
       }
 
-      // Complete right away (fully specified prompt)
       showConfirmation(data)
     } catch (error) {
       addAssistant(`Sorry, I encountered an error processing your request. Please try again.`)
@@ -324,13 +326,18 @@ export default function ChatPage() {
   if (!token) {
     return (
       <AuthGate
-        onAuthenticated={(t) => {
+        onAuthenticated={(t, user) => {
           saveToken(t)
           setToken(t)
+          if (user) setCurrentUser(user)
           setCurrentStep("request")
         }}
       />
     )
+  }
+
+  if (showAdmin) {
+    return <AdminDashboard onBack={() => setShowAdmin(false)} />
   }
 
   return (
@@ -354,7 +361,12 @@ export default function ChatPage() {
             </button>
           )}
           <div className="flex-1">
-            <ChatHeader onNewChat={resetChat} onLogout={handleLogout} />
+            <ChatHeader
+              onNewChat={resetChat}
+              onLogout={handleLogout}
+              isAdmin={currentUser?.role === "admin"}
+              onOpenAdmin={() => setShowAdmin(true)}
+            />
           </div>
         </div>
 
@@ -369,7 +381,6 @@ export default function ChatPage() {
                 <ChatMessage key={message.id} message={message} />
               ))}
 
-              {/* Interactive question chips */}
               {pendingQuestions.length > 0 && (
                 <div className="my-3 flex flex-wrap gap-2">
                   {pendingQuestions[0].options.map((opt: any, i: number) => (
@@ -384,7 +395,14 @@ export default function ChatPage() {
                 </div>
               )}
 
-              {isLoading && <ThinkingIndicator />}
+              {isLoading && (
+                <div className="flex items-center gap-2 py-4">
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  </div>
+                  <span className="text-muted-foreground text-sm">Processing...</span>
+                </div>
+              )}
 
               {currentStep === "orchestration" && <PhaseChecklist current={currentPhase} />}
 
@@ -411,10 +429,6 @@ export default function ChatPage() {
   )
 }
 
-
-
-
-
 function getPlaceholder(step: WorkflowStep, config: ImageConfig | null): string {
   switch (step) {
     case "request":
@@ -440,30 +454,6 @@ const PHASES = [
   { key: "storing_image", label: "Storing image" },
   { key: "completed", label: "Complete" },
 ]
-const THINKING_MESSAGES = [
-  "Understanding your request…",
-  "Analyzing the configuration…",
-  "Checking supported OS and packages…",
-  "Preparing the specification…",
-]
-
-function ThinkingIndicator() {
-  const [idx, setIdx] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setIdx((i) => (i + 1) % THINKING_MESSAGES.length), 1800)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <div className="flex items-center gap-3 py-4">
-      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-        <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-      </div>
-      <span className="text-muted-foreground text-sm transition-opacity duration-300">
-        {THINKING_MESSAGES[idx]}
-      </span>
-    </div>
-  )
-} 
 
 function PhaseChecklist({ current }: { current: string }) {
   const currentIdx = PHASES.findIndex((p) => p.key === current)
