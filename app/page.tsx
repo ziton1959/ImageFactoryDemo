@@ -9,9 +9,10 @@ import { WorkflowSteps, type WorkflowStep } from "@/components/workflow-steps"
 import { ImageDownload } from "@/components/image-download"
 import { AuthGate } from "@/components/auth-gate"
 import { HistorySidebar } from "@/components/history-sidebar"
-import { AdminDashboard } from "@/components/admin-dashboard"
 import { getToken, saveToken, clearToken } from "@/lib/auth"
 import { PanelLeft } from "lucide-react"
+import { AdminConsole } from "@/components/admin-console"
+
 
 const API_BASE = "http://10.202.135.233:8000"
 
@@ -67,7 +68,12 @@ export default function ChatPage() {
         .catch(() => {})
     }
   }, [])
-
+  // Admins land on the console automatically
+  useEffect(() => {
+    if (currentUser?.role === "admin") {
+      setShowAdmin(true)
+    }
+  }, [currentUser])
   const resetChat = () => {
     setMessages([])
     setImageConfig(null)
@@ -336,8 +342,8 @@ export default function ChatPage() {
     )
   }
 
-  if (showAdmin) {
-    return <AdminDashboard onBack={() => setShowAdmin(false)} />
+  if (showAdmin && currentUser?.role === "admin") {
+    return <AdminConsole currentUser={currentUser} onBackToChat={() => setShowAdmin(false)} />
   }
 
   return (
