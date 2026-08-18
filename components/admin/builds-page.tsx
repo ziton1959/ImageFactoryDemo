@@ -16,7 +16,7 @@ export function BuildsPage() {
   const [os, setOs] = useState("")
   const [user, setUser] = useState("")
   const [sort, setSort] = useState<"newest" | "oldest">("newest")
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   const [page, setPage] = useState(1)
 
   const auth = { Authorization: `Bearer ${getToken()}` }
@@ -56,10 +56,10 @@ export function BuildsPage() {
   useEffect(() => { setPage(1) }, [q, status, os, user, sort])
 
   const deleteBuild = async (jobId: number) => {
-    await fetch(`${API_BASE}/admin/builds/${jobId}`, { method: "DELETE", headers: auth })
-    setConfirmDelete(null)
-    setBuilds((prev) => prev.filter((b) => b.job_id !== jobId))
-  }
+  await fetch(`${API_BASE}/admin/builds/${jobId}`, { method: "DELETE", headers: auth })
+  setDeleteTarget(null)
+  setBuilds((prev) => prev.filter((b) => b.job_id !== jobId))
+}
 
   const clearFilters = () => { setQ(""); setStatus(""); setOs(""); setUser("") }
   const hasFilters = q || status || os || user
@@ -183,21 +183,14 @@ export function BuildsPage() {
                     </td>
                     <td className="px-4 py-3">{statusBadge(b.status)}</td>
                     <td className="px-4 py-3 text-right">
-                      {confirmDelete === b.job_id ? (
-                        <span className="inline-flex items-center gap-1">
-                          <button onClick={() => deleteBuild(b.job_id)} className="text-xs text-red-600 px-2 py-1 rounded hover:bg-red-50">Delete</button>
-                          <button onClick={() => setConfirmDelete(null)} className="text-xs text-muted-foreground px-1">✕</button>
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setConfirmDelete(b.job_id)}
-                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 p-1 transition-opacity"
-                          title="Delete build"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </td>
+  <button
+    onClick={() => setDeleteTarget(b)}
+    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 p-1 transition-opacity"
+    title="Delete build"
+  >
+    <Trash2 className="w-4 h-4" />
+  </button>
+</td>
                   </tr>
                 ))
               )}
