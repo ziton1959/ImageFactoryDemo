@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { getToken } from "@/lib/auth"
-import { Search, X, ArrowUpDown, Trash2, SlidersHorizontal } from "lucide-react"
+import { Search, X, ArrowUpDown, Trash2, SlidersHorizontal, ChevronLeft, ChevronRight } from "lucide-react"
 
 const API_BASE = "http://10.202.135.233:8000"
+const PAGE_SIZE = 10
 
 export function BuildsPage() {
   const [builds, setBuilds] = useState<any[]>([])
@@ -16,10 +17,10 @@ export function BuildsPage() {
   const [user, setUser] = useState("")
   const [sort, setSort] = useState<"newest" | "oldest">("newest")
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
 
   const auth = { Authorization: `Bearer ${getToken()}` }
 
-  // load usernames for the filter dropdown
   useEffect(() => {
     fetch(`${API_BASE}/admin/users`, { headers: auth })
       .then((r) => (r.ok ? r.json() : []))
@@ -51,6 +52,9 @@ export function BuildsPage() {
     return () => clearTimeout(t)
   }, [load])
 
+  // reset to page 1 whenever filters/sort change
+  useEffect(() => { setPage(1) }, [q, status, os, user, sort])
+
   const deleteBuild = async (jobId: number) => {
     await fetch(`${API_BASE}/admin/builds/${jobId}`, { method: "DELETE", headers: auth })
     setConfirmDelete(null)
@@ -59,6 +63,12 @@ export function BuildsPage() {
 
   const clearFilters = () => { setQ(""); setStatus(""); setOs(""); setUser("") }
   const hasFilters = q || status || os || user
+
+  // pagination math
+  const totalPages = Math.max(1, Math.ceil(builds.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const startIdx = (currentPage - 1) * PAGE_SIZE
+  const pageItems = builds.slice(startIdx, startIdx + PAGE_SIZE)
 
   const statusBadge = (s: string) => {
     const styles: Record<string, string> = {
@@ -114,7 +124,6 @@ export function BuildsPage() {
             { value: "rocky", label: "Rocky" },
           ]} />
 
-        {/* Sort toggle */}
         <button
           onClick={() => setSort((s) => (s === "newest" ? "oldest" : "newest"))}
           className="flex items-center gap-1.5 text-sm rounded-lg border border-border bg-background px-3 py-2 hover:bg-muted/50 transition"
@@ -153,14 +162,14 @@ export function BuildsPage() {
               </tr>
             </thead>
             <tbody>
-              {builds.length === 0 && !loading ? (
+              {pageItems.length === 0 && !loading ? (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                     No builds match your filters.
                   </td>
                 </tr>
               ) : (
-                builds.map((b) => (
+                pageItems.map((b) => (
                   <tr key={b.job_id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors group">
                     <td className="px-4 py-3 text-muted-foreground">{b.job_id}</td>
                     <td className="px-4 py-3 text-foreground font-medium">{b.template_name}</td>
@@ -195,9 +204,70 @@ export function BuildsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination footer */}
+        {builds.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-xs text-muted-foreground">
+              Showing {startIdx + 1}–{Math.min(startIdx + PAGE_SIZE, builds.length)} of {builds.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Prev
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                {getPageNumbers(currentPage, totalPages).map((p, i) =>
+                  p === "…" ? (
+                    <span key={`e${i}`} className="px-1.5 text-muted-foreground text-sm">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      className={`min-w-[32px] h-8 rounded-lg text-sm transition ${
+                        currentPage === p
+                          ? "bg-primary text-primary-foreground font-medium"
+                          : "text-muted-foreground hover:bg-muted/50"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              </div>
+
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+// Build a compact page list like: 1 … 4 5 [6] 7 8 … 12
+function getPageNumbers(current: number, total: number): (number | "…")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: (number | "…")[] = [1]
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  if (start > 2) pages.push("…")
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < total - 1) pages.push("…")
+  pages.push(total)
+  return pages
 }
 
 function FilterSelect({
