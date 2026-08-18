@@ -52,19 +52,22 @@ export function BuildsPage() {
     return () => clearTimeout(t)
   }, [load])
 
-  // reset to page 1 whenever filters/sort change
   useEffect(() => { setPage(1) }, [q, status, os, user, sort])
 
   const deleteBuild = async (jobId: number) => {
-  await fetch(`${API_BASE}/admin/builds/${jobId}`, { method: "DELETE", headers: auth })
-  setDeleteTarget(null)
-  setBuilds((prev) => prev.filter((b) => b.job_id !== jobId))
-}
+    try {
+      await fetch(`${API_BASE}/admin/builds/${jobId}`, { method: "DELETE", headers: auth })
+      setBuilds((prev) => prev.filter((b) => b.job_id !== jobId))
+    } catch {
+      // ignore
+    } finally {
+      setDeleteTarget(null)
+    }
+  }
 
   const clearFilters = () => { setQ(""); setStatus(""); setOs(""); setUser("") }
   const hasFilters = q || status || os || user
 
-  // pagination math
   const totalPages = Math.max(1, Math.ceil(builds.length / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
   const startIdx = (currentPage - 1) * PAGE_SIZE
@@ -183,14 +186,14 @@ export function BuildsPage() {
                     </td>
                     <td className="px-4 py-3">{statusBadge(b.status)}</td>
                     <td className="px-4 py-3 text-right">
-  <button
-    onClick={() => setDeleteTarget(b)}
-    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 p-1 transition-opacity"
-    title="Delete build"
-  >
-    <Trash2 className="w-4 h-4" />
-  </button>
-</td>
+                      <button
+                        onClick={() => setDeleteTarget(b)}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 p-1 transition-opacity"
+                        title="Delete build"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -246,11 +249,57 @@ export function BuildsPage() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <h2 className="text-base font-semibold text-foreground">Delete this build?</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-1">
+              You&apos;re about to delete build{" "}
+              <span className="font-medium text-foreground">#{deleteTarget.job_id}</span>
+              {deleteTarget.template_name && deleteTarget.template_name !== "—" ? (
+                <>
+                  {" "}— <span className="font-medium text-foreground">{deleteTarget.template_name}</span>
+                </>
+              ) : null}
+              .
+            </p>
+            <p className="text-sm text-muted-foreground mb-6">
+              This removes it from history and can&apos;t be undone. The stored image (if any) is not affected.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 text-sm border border-border rounded-lg py-2 hover:bg-muted/50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteBuild(deleteTarget.job_id)}
+                className="flex-1 text-sm bg-red-500 text-white rounded-lg py-2 hover:bg-red-600 transition"
+              >
+                Delete build
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Build a compact page list like: 1 … 4 5 [6] 7 8 … 12
 function getPageNumbers(current: number, total: number): (number | "…")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
   const pages: (number | "…")[] = [1]
