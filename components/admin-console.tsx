@@ -9,7 +9,7 @@ import { useState } from "react"
 // Pages (built incrementally — start as placeholders, fill in next)
 import { OverviewPage } from "@/components/admin/overview-page"
 // import { StatisticsPage } from "@/components/admin/statistics-page"
-// import { BuildsPage } from "@/components/admin/builds-page"
+import { BuildsPage } from "@/components/admin/builds-page"
 // import { UsersPage } from "@/components/admin/users-page"
 // import { SettingsPage } from "@/components/admin/settings-page"
 
@@ -93,7 +93,7 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
       <main className="flex-1 overflow-y-auto">
         {section === "overview" && <OverviewPage />}
         {section === "statistics" && <Placeholder title="Statistics" />}
-        {section === "builds" && <Placeholder title="Builds" />}
+        {section === "builds" && <BuildsPage />}
         {section === "users" && <Placeholder title="Users" />}
         {section === "settings" && <Placeholder title="Settings" />}
       </main>
