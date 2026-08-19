@@ -119,62 +119,17 @@ export function OverviewPage() {
         </div>
       </div>
 
-            {/* Charts — 2-column balanced grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Builds over time — full width on top */}
-        <div className="md:col-span-2 rounded-xl border border-border bg-card p-5">
-          <h3 className="text-sm font-medium text-foreground mb-4">Builds over time</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data.builds_per_day || []}>
-              <defs>
-                <linearGradient id="buildGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={28} allowDecimals={false} />
-              <Tooltip />
-              <Area type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} fill="url(#buildGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Status donut — bottom left */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="text-sm font-medium text-foreground mb-4">Build status</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={2}>
-                {statusData.map((entry: any, i: number) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap gap-3 justify-center mt-2">
-            {statusData.map((s: any) => (
-              <div key={s.name} className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-sm" style={{ background: s.color }} />
-                <span className="text-xs text-muted-foreground capitalize">{s.name} {s.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Builds by OS — bottom right */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="text-sm font-medium text-foreground mb-4">Builds by OS</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={data.builds_by_os || []}>
-              <XAxis dataKey="os" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={28} allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Charts row 2 — builds by OS */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="text-sm font-medium text-foreground mb-4">Builds by OS</h3>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={data.builds_by_os || []}>
+            <XAxis dataKey="os" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+            <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={28} allowDecimals={false} />
+            <Tooltip />
+            <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )
