@@ -2,9 +2,9 @@
 
 import { useState } from "react"
    import {
-     LayoutDashboard, BarChart3, Server, Users, Settings,
-     MessageSquare, Box, ChevronRight,
-   } from "lucide-react"
+  LayoutDashboard, BarChart3, Server, Users, Settings,
+  MessageSquare, Box, ChevronRight, HardDrive,
+} from "lucide-react"
 
 // Pages (built incrementally — start as placeholders, fill in next)
 import { OverviewPage } from "@/components/admin/overview-page"
