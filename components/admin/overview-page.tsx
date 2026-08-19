@@ -75,9 +75,9 @@ export function OverviewPage() {
       </div>
 
       {/* Charts row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         {/* Builds over time */}
-        <div className="lg:col-span-2 rounded-xl border border-border bg-card p-5">
+        <div className="md:col-span-2 rounded-xl border border-border bg-card p-5">
           <h3 className="text-sm font-medium text-foreground mb-4">Builds over time</h3>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={data.builds_per_day || []}>
