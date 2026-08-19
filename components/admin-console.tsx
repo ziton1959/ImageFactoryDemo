@@ -12,8 +12,9 @@ import { OverviewPage } from "@/components/admin/overview-page"
 import { BuildsPage } from "@/components/admin/builds-page"
 // import { UsersPage } from "@/components/admin/users-page"
 // import { SettingsPage } from "@/components/admin/settings-page"
+import { StoragePage } from "@/components/admin/storage-page"
 
-type AdminSection = "overview" | "statistics" | "builds" | "users" | "settings"
+type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings"
 
 interface AdminConsoleProps {
   currentUser: any
@@ -24,6 +25,7 @@ const NAV: { key: AdminSection; label: string; icon: any }[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
   { key: "statistics", label: "Statistics", icon: BarChart3 },
   { key: "builds", label: "Builds", icon: Server },
+  { key: "storage", label: "Storage", icon: HardDrive },   // ← add
   { key: "users", label: "Users", icon: Users },
   { key: "settings", label: "Settings", icon: Settings },
 ]
@@ -96,6 +98,7 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
         {section === "builds" && <BuildsPage />}
         {section === "users" && <Placeholder title="Users" />}
         {section === "settings" && <Placeholder title="Settings" />}
+        {section === "storage" && <StoragePage />}
       </main>
     </div>
   )

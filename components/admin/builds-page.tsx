@@ -25,7 +25,7 @@ export function BuildsPage() {
     fetch(`${API_BASE}/admin/users`, { headers: auth })
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => setUsers(Array.isArray(data) ? data.map((u: any) => u.username) : []))
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   const load = useCallback(async () => {
@@ -225,11 +225,10 @@ export function BuildsPage() {
                     <button
                       key={p}
                       onClick={() => setPage(p as number)}
-                      className={`min-w-[32px] h-8 rounded-lg text-sm transition ${
-                        currentPage === p
+                      className={`min-w-[32px] h-8 rounded-lg text-sm transition ${currentPage === p
                           ? "bg-primary text-primary-foreground font-medium"
                           : "text-muted-foreground hover:bg-muted/50"
-                      }`}
+                        }`}
                     >
                       {p}
                     </button>
@@ -277,7 +276,8 @@ export function BuildsPage() {
               .
             </p>
             <p className="text-sm text-muted-foreground mb-6">
-              This removes it from history and can&apos;t be undone. The stored image (if any) is not affected.
+              This removes the build <span className="font-medium">record</span> from history only.
+              The built image stays in storage — manage images separately under Storage.
             </p>
             <div className="flex gap-3">
               <button
@@ -324,9 +324,8 @@ function FilterSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`text-sm rounded-lg border px-3 py-2 bg-background transition ${
-        value ? "border-primary text-foreground" : "border-border text-muted-foreground"
-      }`}
+      className={`text-sm rounded-lg border px-3 py-2 bg-background transition ${value ? "border-primary text-foreground" : "border-border text-muted-foreground"
+        }`}
     >
       <option value="">{placeholder}</option>
       {options.map((o) => (
