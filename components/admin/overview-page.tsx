@@ -16,13 +16,20 @@ export function OverviewPage() {
 
   useEffect(() => {
     const auth = { Authorization: `Bearer ${getToken()}` }
-    Promise.all([
-      fetch(`${API_BASE}/admin/stats/overview`, { headers: auth }).then((r) => r.json()),
-      fetch(`${API_BASE}/admin/health`, { headers: auth }).then((r) => r.json()),
-    ])
-      .then(([o, h]) => { setData(o); setHealth(h) })
-      .catch(() => {})
+
+    // Load the main stats (this drives the page).
+    fetch(`${API_BASE}/admin/stats/overview`, { headers: auth })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((o) => setData(o))
+      .catch(() => setData(null))
       .finally(() => setLoading(false))
+
+    // Load health separately — a failure here only hides the badge,
+    // it must not blank the whole page.
+    fetch(`${API_BASE}/admin/health`, { headers: auth })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((h) => setHealth(h))
+      .catch(() => setHealth(null))
   }, [])
 
   if (loading) return <div className="p-8 text-muted-foreground">Loading overview…</div>
