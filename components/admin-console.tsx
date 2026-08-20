@@ -13,6 +13,7 @@ import { BuildsPage } from "@/components/admin/builds-page"
 // import { UsersPage } from "@/components/admin/users-page"
 // import { SettingsPage } from "@/components/admin/settings-page"
 import { StoragePage } from "@/components/admin/storage-page"
+import { UsersPage } from "@/components/admin/users-page"
 
 type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings"
 
@@ -96,7 +97,7 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
         {section === "overview" && <OverviewPage />}
         {section === "statistics" && <Placeholder title="Statistics" />}
         {section === "builds" && <BuildsPage />}
-        {section === "users" && <Placeholder title="Users" />}
+        {section === "users" && <UsersPage />}
         {section === "settings" && <Placeholder title="Settings" />}
         {section === "storage" && <StoragePage />}
       </main>
