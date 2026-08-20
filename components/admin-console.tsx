@@ -14,9 +14,9 @@ import { BuildsPage } from "@/components/admin/builds-page"
 // import { SettingsPage } from "@/components/admin/settings-page"
 import { StoragePage } from "@/components/admin/storage-page"
 import { UsersPage } from "@/components/admin/users-page"
+import { ProfilePage } from "@/components/admin/profile-page"
 
-type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings"
-
+type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings" | "profile"
 interface AdminConsoleProps {
   currentUser: any
   onBackToChat: () => void
@@ -80,15 +80,20 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
             Back to chat
             <ChevronRight className="w-3.5 h-3.5 ml-auto" />
           </button>
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-7 h-7 rounded-full bg-primary/80 flex items-center justify-center">
+          <button
+            onClick={() => setSection("profile")}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              section === "profile" ? "bg-card" : "hover:bg-card"
+            }`}
+          >
+            <div className="w-7 h-7 rounded-full bg-primary/80 flex items-center justify-center shrink-0">
               <span className="text-xs text-primary-foreground font-semibold">{initial}</span>
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 text-left">
               <div className="text-sm text-foreground truncate">{currentUser?.username || "admin"}</div>
               <div className="text-[11px] text-muted-foreground">Administrator</div>
             </div>
-          </div>
+          </button>
         </div>
       </aside>
 
@@ -100,6 +105,7 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
         {section === "users" && <UsersPage />}
         {section === "settings" && <Placeholder title="Settings" />}
         {section === "storage" && <StoragePage />}
+        {section === "profile" && <ProfilePage />}
       </main>
     </div>
   )
