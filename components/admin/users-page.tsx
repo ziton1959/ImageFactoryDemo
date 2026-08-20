@@ -2,16 +2,19 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { getToken } from "@/lib/auth"
-import { Search, UserPlus, Trash2, Shield, User as UserIcon } from "lucide-react"
+import { Search, UserPlus, Shield, User as UserIcon, Archive, ArchiveRestore, ChevronLeft, ChevronRight } from "lucide-react"
 
 const API_BASE = "http://10.202.135.233:8000"
+const PAGE_SIZE = 8
 
 export function UsersPage() {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
-  const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archiveTarget, setArchiveTarget] = useState<any | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [page, setPage] = useState(1)
 
   const auth = { Authorization: `Bearer ${getToken()}` }
 
@@ -39,17 +42,35 @@ export function UsersPage() {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)))
   }
 
-  const deleteUser = async (id: number) => {
-    await fetch(`${API_BASE}/admin/users/${id}`, { method: "DELETE", headers: auth })
-    setDeleteTarget(null)
-    setUsers((prev) => prev.filter((u) => u.id !== id))
+  const setArchived = async (id: number, is_active: boolean) => {
+    await fetch(`${API_BASE}/admin/users/${id}/archive`, {
+      method: "PATCH",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active }),
+    })
+    setArchiveTarget(null)
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, is_active } : u)))
   }
 
-  const filtered = users.filter((u) =>
-    !q ||
-    u.username.toLowerCase().includes(q.toLowerCase()) ||
-    (u.email || "").toLowerCase().includes(q.toLowerCase())
-  )
+  const filtered = users.filter((u) => {
+    const active = u.is_active !== false
+    if (showArchived !== !active) return false
+    if (!q) return true
+    return (
+      u.username.toLowerCase().includes(q.toLowerCase()) ||
+      (u.email || "").toLowerCase().includes(q.toLowerCase())
+    )
+  })
+
+  useEffect(() => { setPage(1) }, [q, showArchived])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const startIdx = (currentPage - 1) * PAGE_SIZE
+  const pageItems = filtered.slice(startIdx, startIdx + PAGE_SIZE)
+
+  const activeCount = users.filter((u) => u.is_active !== false).length
+  const archivedCount = users.filter((u) => u.is_active === false).length
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
@@ -64,6 +85,22 @@ export function UsersPage() {
         >
           <UserPlus className="w-4 h-4" />
           Add user
+        </button>
+      </div>
+
+      {/* Active / Archived toggle */}
+      <div className="flex items-center gap-1 mb-4 bg-muted/40 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setShowArchived(false)}
+          className={`text-sm px-3 py-1.5 rounded-md transition ${!showArchived ? "bg-card text-foreground font-medium shadow-sm" : "text-muted-foreground"}`}
+        >
+          Active ({activeCount})
+        </button>
+        <button
+          onClick={() => setShowArchived(true)}
+          className={`text-sm px-3 py-1.5 rounded-md transition ${showArchived ? "bg-card text-foreground font-medium shadow-sm" : "text-muted-foreground"}`}
+        >
+          Archived ({archivedCount})
         </button>
       </div>
 
@@ -93,14 +130,16 @@ export function UsersPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Loading…</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No users found.</td></tr>
+            ) : pageItems.length === 0 ? (
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                {showArchived ? "No archived users." : "No active users found."}
+              </td></tr>
             ) : (
-              filtered.map((u) => (
+              pageItems.map((u) => (
                 <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors group">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-primary/80 flex items-center justify-center shrink-0">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${u.is_active === false ? "bg-muted-foreground/40" : "bg-primary/80"}`}>
                         <span className="text-xs text-primary-foreground font-semibold">
                           {u.username.charAt(0).toUpperCase()}
                         </span>
@@ -120,7 +159,8 @@ export function UsersPage() {
                       <select
                         value={u.role === "admin" ? "admin" : "user"}
                         onChange={(e) => changeRole(u.id, e.target.value)}
-                        className="text-xs border border-border rounded-md px-2 py-1 bg-background"
+                        disabled={u.is_active === false}
+                        className="text-xs border border-border rounded-md px-2 py-1 bg-background disabled:opacity-50"
                       >
                         <option value="user">user</option>
                         <option value="admin">admin</option>
@@ -128,19 +168,54 @@ export function UsersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => setDeleteTarget(u)}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 p-1 transition-opacity"
-                      title="Delete user"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {u.is_active === false ? (
+                      <button
+                        onClick={() => setArchived(u.id, true)}
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 px-2 py-1 rounded transition"
+                        title="Restore user"
+                      >
+                        <ArchiveRestore className="w-4 h-4" />
+                        Restore
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setArchiveTarget(u)}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-amber-600 p-1 transition-opacity"
+                        title="Archive user"
+                      >
+                        <Archive className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        {filtered.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-xs text-muted-foreground">
+              Showing {startIdx + 1}–{Math.min(startIdx + PAGE_SIZE, filtered.length)} of {filtered.length}
+            </span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}
+                className="flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                <ChevronLeft className="w-4 h-4" />
+                Prev
+              </button>
+              <span className="text-sm text-muted-foreground px-2">
+                {currentPage} / {totalPages}
+              </span>
+              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                className="flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted/50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Create user modal */}
@@ -148,33 +223,32 @@ export function UsersPage() {
         <CreateUserModal
           onClose={() => setShowCreate(false)}
           onCreated={(newUser) => {
-            setUsers((prev) => [...prev, { ...newUser, build_count: 0 }])
+            setUsers((prev) => [...prev, { ...newUser, build_count: 0, is_active: true }])
             setShowCreate(false)
           }}
         />
       )}
 
-      {/* Delete confirmation modal */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDeleteTarget(null)}>
+      {/* Archive confirmation modal */}
+      {archiveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setArchiveTarget(null)}>
           <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <Trash2 className="w-5 h-5 text-red-600" />
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <Archive className="w-5 h-5 text-amber-600" />
               </div>
-              <h2 className="text-base font-semibold text-foreground">Delete this user?</h2>
+              <h2 className="text-base font-semibold text-foreground">Archive this user?</h2>
             </div>
             <p className="text-sm text-muted-foreground mb-6">
-              You&apos;re about to delete <span className="font-medium text-foreground">{deleteTarget.username}</span>
-              {deleteTarget.build_count > 0 ? ` and lose the link to their ${deleteTarget.build_count} build(s)` : ""}.
-              This can&apos;t be undone.
+              <span className="font-medium text-foreground">{archiveTarget.username}</span> will be unable to sign in,
+              but their {archiveTarget.build_count} build(s) and history are preserved. You can restore them anytime.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 text-sm border border-border rounded-lg py-2 hover:bg-muted/50 transition">
+              <button onClick={() => setArchiveTarget(null)} className="flex-1 text-sm border border-border rounded-lg py-2 hover:bg-muted/50 transition">
                 Cancel
               </button>
-              <button onClick={() => deleteUser(deleteTarget.id)} className="flex-1 text-sm bg-red-500 text-white rounded-lg py-2 hover:bg-red-600 transition">
-                Delete user
+              <button onClick={() => setArchived(archiveTarget.id, false)} className="flex-1 text-sm bg-amber-500 text-white rounded-lg py-2 hover:bg-amber-600 transition">
+                Archive user
               </button>
             </div>
           </div>
@@ -222,7 +296,6 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-base font-semibold text-foreground mb-4">Add a new user</h2>
-
         <div className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Username</label>
@@ -248,9 +321,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </select>
           </div>
         </div>
-
         {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
-
         <div className="flex gap-3 mt-5">
           <button onClick={onClose} className="flex-1 text-sm border border-border rounded-lg py-2 hover:bg-muted/50 transition">
             Cancel
