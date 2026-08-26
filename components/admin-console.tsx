@@ -17,8 +17,9 @@ import { UsersPage } from "@/components/admin/users-page"
 import { ProfilePage } from "@/components/admin/profile-page"
 import { SettingsPage } from "@/components/admin/settings-page"
 import { StatisticsPage } from "@/components/admin/statistics-page"
+import { AuditPage } from "@/components/admin/audit-page"
 
-type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings" | "profile"
+type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings" | "profile" | "audit"
 interface AdminConsoleProps {
   currentUser: any
   onBackToChat: () => void
@@ -31,6 +32,8 @@ const NAV: { key: AdminSection; label: string; icon: any }[] = [
   { key: "storage", label: "Storage", icon: HardDrive },   // ← add
   { key: "users", label: "Users", icon: Users },
   { key: "settings", label: "Settings", icon: Settings },
+  // add ScrollText to the lucide import
+  { key: "audit", label: "Audit log", icon: ScrollText },
 ]
 
 export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
@@ -106,6 +109,7 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
         {section === "settings" && <SettingsPage />}
         {section === "storage" && <StoragePage />}
         {section === "profile" && <ProfilePage />}
+        {section === "audit" && <AuditPage />}
       </main>
     </div>
   )
