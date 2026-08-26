@@ -16,6 +16,7 @@ import { StoragePage } from "@/components/admin/storage-page"
 import { UsersPage } from "@/components/admin/users-page"
 import { ProfilePage } from "@/components/admin/profile-page"
 import { SettingsPage } from "@/components/admin/settings-page"
+import { StatisticsPage } from "@/components/admin/statistics-page"
 
 type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings" | "profile"
 interface AdminConsoleProps {
@@ -59,8 +60,8 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
                 key={item.key}
                 onClick={() => setSection(item.key)}
                 className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${active
-                    ? "bg-primary text-primary-foreground font-medium"
-                    : "text-muted-foreground hover:bg-card hover:text-foreground"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "text-muted-foreground hover:bg-card hover:text-foreground"
                   }`}
               >
                 <Icon className="w-4 h-4" />
@@ -99,7 +100,7 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         {section === "overview" && <OverviewPage />}
-        {section === "statistics" && <Placeholder title="Statistics" />}
+        {section === "statistics" && <StatisticsPage />}
         {section === "builds" && <BuildsPage />}
         {section === "users" && <UsersPage />}
         {section === "settings" && <SettingsPage />}
