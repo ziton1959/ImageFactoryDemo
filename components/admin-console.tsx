@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-   import {
+import {
   LayoutDashboard, BarChart3, Server, Users, Settings,
   MessageSquare, Box, ChevronRight, HardDrive,
 } from "lucide-react"
@@ -15,6 +15,7 @@ import { BuildsPage } from "@/components/admin/builds-page"
 import { StoragePage } from "@/components/admin/storage-page"
 import { UsersPage } from "@/components/admin/users-page"
 import { ProfilePage } from "@/components/admin/profile-page"
+import { SettingsPage } from "@/components/admin/settings-page"
 
 type AdminSection = "overview" | "statistics" | "builds" | "storage" | "users" | "settings" | "profile"
 interface AdminConsoleProps {
@@ -57,11 +58,10 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
               <button
                 key={item.key}
                 onClick={() => setSection(item.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  active
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${active
                     ? "bg-primary text-primary-foreground font-medium"
                     : "text-muted-foreground hover:bg-card hover:text-foreground"
-                }`}
+                  }`}
               >
                 <Icon className="w-4 h-4" />
                 {item.label}
@@ -82,9 +82,8 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
           </button>
           <button
             onClick={() => setSection("profile")}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-              section === "profile" ? "bg-card" : "hover:bg-card"
-            }`}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${section === "profile" ? "bg-card" : "hover:bg-card"
+              }`}
           >
             <div className="w-7 h-7 rounded-full bg-primary/80 flex items-center justify-center shrink-0">
               <span className="text-xs text-primary-foreground font-semibold">{initial}</span>
@@ -103,7 +102,7 @@ export function AdminConsole({ currentUser, onBackToChat }: AdminConsoleProps) {
         {section === "statistics" && <Placeholder title="Statistics" />}
         {section === "builds" && <BuildsPage />}
         {section === "users" && <UsersPage />}
-        {section === "settings" && <Placeholder title="Settings" />}
+        {section === "settings" && <SettingsPage />}
         {section === "storage" && <StoragePage />}
         {section === "profile" && <ProfilePage />}
       </main>
