@@ -3,7 +3,7 @@
 import { useState } from "react"
 import {
   LayoutDashboard, BarChart3, Server, Users, Settings,
-  MessageSquare, Box, ChevronRight, HardDrive,
+  MessageSquare, Box, ChevronRight, HardDrive, ScrollText,
 } from "lucide-react"
 
 // Pages (built incrementally — start as placeholders, fill in next)
@@ -32,7 +32,6 @@ const NAV: { key: AdminSection; label: string; icon: any }[] = [
   { key: "storage", label: "Storage", icon: HardDrive },   // ← add
   { key: "users", label: "Users", icon: Users },
   { key: "settings", label: "Settings", icon: Settings },
-  // add ScrollText to the lucide import
   { key: "audit", label: "Audit log", icon: ScrollText },
 ]
 
