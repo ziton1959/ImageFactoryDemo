@@ -291,11 +291,23 @@ export default function ChatPage() {
             `**Starting Automated Build Pipeline**\n\nThe orchestration system is building your image (job ${currentJobId}). This typically takes 2-5 minutes...`,
             "building",
           )
-          completeStep("validation")
-          await fetch(`${API_BASE}/api/vm/build/${currentJobId}`, {
+                    completeStep("validation")
+          const buildRes = await fetch(`${API_BASE}/api/vm/build/${currentJobId}`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
           })
+
+          if (!buildRes.ok) {
+            // e.g. maintenance mode (503) or other error
+            const err = await buildRes.json().catch(() => ({}))
+            addAssistant(
+              `**Build could not start**\n\n${err.detail || "The build service is unavailable right now. Please try again later."}`,
+            )
+            setCurrentStep("validation")
+            setIsLoading(false)
+            return
+          }
+
           pollJob(currentJobId)
           setIsLoading(false)
           return
