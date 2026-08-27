@@ -49,6 +49,7 @@ export default function ChatPage() {
   const [builtImageName, setBuiltImageName] = useState<string>("")
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [historyRefresh, setHistoryRefresh] = useState(0)
+  const [rebuildSpec, setRebuildSpec] = useState<any>(null)
 
   // Interactive question state
   const [pendingQuestions, setPendingQuestions] = useState<any[]>([])
@@ -87,6 +88,7 @@ export default function ChatPage() {
     setCurrentStep("request")
     setPendingQuestions([])
     setPendingSpec(null)
+    setRebuildSpec(null)
   }
 
   const handleLogout = () => {
@@ -290,6 +292,69 @@ export default function ChatPage() {
     }, 5000)
   }
 
+  const handleSelectHistory = async (jobId: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/jobs/mine/history/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        addAssistant("Couldn't load that build's details.")
+        return
+      }
+      const data = await res.json()
+      const spec = data.spec || {}
+
+      resetChat()
+
+      const pkgs = (spec.packages || []).join(", ") || "none"
+      const statusLine =
+        data.status === "completed"
+          ? "This build completed successfully."
+          : data.status === "failed"
+          ? "This build failed."
+          : `Status: ${data.status}`
+
+      addAssistant(
+        `**Build #${jobId}**\n\n` +
+          `| Parameter | Value |\n|-----------|-------|\n` +
+          `| **OS** | ${spec.os || "—"} |\n` +
+          `| **vCPU** | ${spec.cpu || "—"} |\n` +
+          `| **RAM** | ${spec.ram_gb || "—"} GB |\n` +
+          `| **Packages** | ${pkgs} |\n` +
+          `| **Template** | ${spec.template_name || "—"} |\n\n` +
+          `${statusLine}`,
+      )
+
+      if (data.status === "completed" && spec.template_name) {
+        setBuiltImageName(spec.template_name)
+        setImageReady(true)
+        setCurrentStep("download")
+        completeStep("download")
+      }
+
+      setRebuildSpec(spec)
+    } catch {
+      addAssistant("Couldn't load that build's details.")
+    }
+  }
+
+  const rebuildFromSpec = async (spec: any) => {
+    setRebuildSpec(null)
+    setImageReady(false)
+    setCurrentStep("request")
+    addUser(`Rebuild: ${spec.template_name || "this configuration"}`)
+    await submitCompleteSpec({
+      os: spec.os,
+      cpu: spec.cpu,
+      ram_gb: spec.ram_gb,
+      packages: spec.packages || [],
+      _clarified: (spec.packages || []).filter((p: string) =>
+        ["terraform", "kubectl", "docker-ce"].includes(String(p).toLowerCase())
+      ),
+      _suggested: true,
+    })
+  }
+
   const handleSendMessage = async (content: string) => {
     addUser(content)
     setIsLoading(true)
@@ -380,7 +445,7 @@ export default function ChatPage() {
       <HistorySidebar
         open={sidebarOpen}
         onToggle={() => setSidebarOpen((o) => !o)}
-        onSelect={() => {}}
+        onSelect={(jobId: number) => handleSelectHistory(jobId)}
         refreshKey={historyRefresh}
       />
 
@@ -447,6 +512,17 @@ export default function ChatPage() {
                   imageSize="~900 MB"
                   onDownload={() => completeStep("download")}
                 />
+              )}
+
+              {rebuildSpec && (
+                <div className="my-3">
+                  <button
+                    onClick={() => rebuildFromSpec(rebuildSpec)}
+                    className="text-sm bg-primary text-primary-foreground rounded-lg px-4 py-2 hover:bg-primary/90 transition"
+                  >
+                    Rebuild this configuration
+                  </button>
+                </div>
               )}
 
               <div ref={messagesEndRef} />
