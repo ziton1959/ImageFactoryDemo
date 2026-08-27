@@ -192,7 +192,7 @@ export default function ChatPage() {
     }
   }
 
-  const answerQuestion = async (question: any, value: any) => {
+const answerQuestion = async (question: any, value: any) => {
     const updated = { ...pendingSpec }
 
     if (question.field === "packages_extra") {
@@ -203,6 +203,7 @@ export default function ChatPage() {
         (p: string) => p.toLowerCase() !== question.package,
       )
       if (value) updated.packages.push(value)
+      updated._clarified = [...(updated._clarified || []), question.package]
     } else {
       updated[question.field] = value
     }
