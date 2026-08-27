@@ -192,7 +192,7 @@ export default function ChatPage() {
     }
   }
 
-const answerQuestion = async (question: any, value: any) => {
+  const answerQuestion = async (question: any, value: any) => {
     const updated = { ...pendingSpec }
 
     if (question.field === "packages_extra") {
@@ -220,6 +220,20 @@ const answerQuestion = async (question: any, value: any) => {
     } else {
       setPendingQuestions([])
       await submitCompleteSpec(updated)
+    }
+  }
+
+  const fetchExplanation = async (jobId: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/vm/explain/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        addAssistant(`**What went wrong**\n\n${data.explanation}`)
+      }
+    } catch {
+      // silent — the raw log is already shown
     }
   }
 
@@ -261,6 +275,8 @@ const answerQuestion = async (question: any, value: any) => {
           addAssistant(
             `**Build Failed**\n\nThe build did not complete. Last log output:\n\n\`\`\`\n${err}\n\`\`\``,
           )
+          // fetch an AI explanation
+          fetchExplanation(jobId)
         } else {
           setBuildProgress((p) => (p < 90 ? p + 8 : 90))
         }
@@ -292,7 +308,7 @@ const answerQuestion = async (question: any, value: any) => {
             `**Starting Automated Build Pipeline**\n\nThe orchestration system is building your image (job ${currentJobId}). This typically takes 2-5 minutes...`,
             "building",
           )
-                    completeStep("validation")
+          completeStep("validation")
           const buildRes = await fetch(`${API_BASE}/api/vm/build/${currentJobId}`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },

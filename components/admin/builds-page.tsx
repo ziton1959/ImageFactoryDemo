@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { getToken } from "@/lib/auth"
-import { Search, X, ArrowUpDown, Trash2, SlidersHorizontal, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, X, ArrowUpDown, Trash2, SlidersHorizontal, ChevronLeft, ChevronRight, Sparkles } from "lucide-react"
+import { ExplainFailureModal } from "@/components/admin/explain-failure-modal"
 
 const API_BASE = "http://10.202.135.233:8000"
 const PAGE_SIZE = 10
@@ -18,7 +19,7 @@ export function BuildsPage() {
   const [sort, setSort] = useState<"newest" | "oldest">("newest")
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null)
   const [page, setPage] = useState(1)
-
+  const [explainJob, setExplainJob] = useState<number | null>(null)
   const auth = { Authorization: `Bearer ${getToken()}` }
 
   useEffect(() => {
@@ -185,14 +186,25 @@ export function BuildsPage() {
                       {b.created_at ? new Date(b.created_at).toLocaleDateString() : "—"}
                     </td>
                     <td className="px-4 py-3">{statusBadge(b.status)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => setDeleteTarget(b)}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 p-1 transition-opacity"
-                        title="Delete build"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                                        <td className="px-4 py-3 text-right">
+                      <div className="inline-flex items-center gap-1">
+                        {b.status === "failed" && (
+                          <button
+                            onClick={() => setExplainJob(b.job_id)}
+                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-primary p-1 transition-opacity"
+                            title="Why did this fail?"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setDeleteTarget(b)}
+                          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500 p-1 transition-opacity"
+                          title="Delete build"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -295,6 +307,10 @@ export function BuildsPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Explain failure modal */}
+      {explainJob !== null && (
+        <ExplainFailureModal jobId={explainJob} onClose={() => setExplainJob(null)} />
       )}
     </div>
   )
